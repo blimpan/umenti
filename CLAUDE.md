@@ -37,6 +37,23 @@ docs/
 - Shared TypeScript types live in `packages/types` and are imported by both `apps/web` and `apps/api`. Define API response shapes there, not inline.
 - The backend is a separate service, not Next.js Server Actions — this is intentional.
 
+## API Conventions (`apps/api`)
+- **Env var names:** `SUPABASE_PROJECT_URL` and `SUPABASE_SECRET_KEY` (not the Supabase defaults `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`)
+- **Adding a route:** create a router in `src/routes/`, apply `requireAuth` middleware, register it in `src/index.ts` under `/api/<name>`
+- **Auth middleware:** `requireAuth` in `src/middleware/auth.ts` verifies the JWT and attaches `{ id, email }` to `req.user`
+- **Prisma migrations:** require a direct DB connection (session pooler, port 5432). The transaction pooler (port 6543) does not work for migrations.
+
+## Supabase Client Usage (`apps/web`)
+- `src/lib/supabase/client.ts` — browser Client Components only
+- `src/lib/supabase/server.ts` — Server Components and Route Handlers only
+- `src/middleware.ts` — cannot use either helper; must inline `createServerClient` directly (needs to write cookies to the response object)
+
+## Routing
+- Student dashboard: `/student/dashboard`
+- Teacher dashboard: `/teacher/dashboard`
+- Role is stored in Supabase `user_metadata.role` (set at signup) and in the Prisma `User` table
+- Dark mode is disabled (light mode only). Do not re-add `.dark` CSS or `next-themes`.
+
 ## Docs Reference
 - Working on a feature? Read `docs/painpoints-and-features.md` first for context on why it exists.
 - Working on a page or UI component? Read the relevant spec in `docs/design-specs/`.

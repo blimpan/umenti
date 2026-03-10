@@ -1,4 +1,4 @@
-# Student Dashboard (`/dashboard`)
+# Student Dashboard (`/student/dashboard`)
 
 The student's home base between sessions. Action-first: the primary goal is to get the student back into a study session or address something urgent (homework due, spaced repetition overdue). Overview information is present but secondary and only shown if actionable.
 

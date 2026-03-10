@@ -21,14 +21,14 @@ Single unified app with role-based views (student vs. teacher). Shared shell, ro
 
 ### Student-facing
 - [x] [Learning session](design-specs/student-learning-session.md)
-- [x] [Student dashboard](design-specs/student-dashboard.md)
+- [x] [Student dashboard](design-specs/student-dashboard.md) — `/student/dashboard`
 - [x] [Course landing](design-specs/course-landing.md)
 - [x] [Module landing](design-specs/module-landing.md)
 - [x] [Spaced repetition session](design-specs/spaced-repetition-session.md)
 - [x] [Notifications](design-specs/notifications.md)
 
 ### Teacher-facing
-- [x] [Teacher dashboard](design-specs/teacher-dashboard.md)
+- [x] [Teacher dashboard](design-specs/teacher-dashboard.md) — `/teacher/dashboard`
 - [x] [Course creation wizard](design-specs/course-creation-wizard.md)
 - [x] [Course editor](design-specs/course-editor.md)
 - [x] [Student analytics](design-specs/student-analytics.md)
