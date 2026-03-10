@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import usersRouter from './routes/users'
 
 dotenv.config()
 
@@ -13,6 +14,8 @@ app.use(express.json())
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
+
+app.use('/api/users', usersRouter)
 
 app.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`)

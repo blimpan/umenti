@@ -2,7 +2,20 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+datasource db {                                                             
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  TEACHER
+  STUDENT
+}
+
+model User {
+  supabaseId  String  @id // primary key
+  email String  @unique
+  role  Role
+  createdAt DateTime  @default(now())
 }
