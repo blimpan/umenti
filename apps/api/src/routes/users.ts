@@ -1,16 +1,16 @@
 import { Router } from 'express'
 import { PrismaClient, Prisma } from '@prisma/client'
 import { requireAuth } from '../middleware/auth'
-
+import { User, Role } from '@metis/types'
 const router = Router()
 const prisma = new PrismaClient()
 
 // POST /api/users — called once after signup to create the user record
 router.post('/', requireAuth, async (req, res) => {
   const { role } = req.body
-  const { id, email } = req.user!
+  const { id, email } = req.user! as User
 
-  if (!role || !['TEACHER', 'STUDENT'].includes(role)) {
+  if (!role || ![Role.TEACHER, Role.STUDENT].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' })
   }
 
