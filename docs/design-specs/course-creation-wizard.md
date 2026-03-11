@@ -32,11 +32,12 @@ This step defines the academic substance of the course. All list fields (modules
 
 Fields:
 - **Modules** — an ordered list of module names. Teacher adds modules one by one. Each module can be expanded inline to add:
-  - **Concepts** the module covers (list)
-  - **Learning outcomes** for the module (list) — the specific skills students will gain
-- **Learning objectives** — a separate list at the course level (the overall skills the course develops, spanning modules)
+  - **Learning objectives** for the module (list) — the teacher's goals for this module (e.g. "Understanding market equilibrium")
+  - **Learning outcomes** for the module (list) — the measurable proof of mastery (e.g. "Student can calculate the equilibrium price on a graph")
 
-The AI suggest button is available at each level: suggest modules given the subject, suggest concepts given the module name, suggest outcomes given the concepts.
+Concepts are **not** entered by the teacher — the LLM infers them from the module objectives, outcomes, subject, and target audience.
+
+The AI suggest button is available at each level: suggest modules given the subject, suggest objectives/outcomes given the module name.
 
 CTA: **"Next"**
 

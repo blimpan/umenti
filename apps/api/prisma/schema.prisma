@@ -2,7 +2,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {                                                             
+datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
@@ -13,9 +13,186 @@ enum Role {
   STUDENT
 }
 
+enum CourseStatus {
+  GENERATING
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+enum ReviewStatus {
+  UNREVIEWED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ExerciseType {
+  MULTIPLE_CHOICE
+  FREE_TEXT
+}
+
+enum MaterialType {
+  FILE
+  LINK
+}
+
 model User {
-  supabaseId  String  @id // primary key
-  email String  @unique
-  role  Role
-  createdAt DateTime  @default(now())
+  supabaseId String   @id
+  email      String   @unique
+  role       Role
+  createdAt  DateTime @default(now())
+
+  courses Course[]
+}
+
+model Course {
+  id             Int          @id @default(autoincrement())
+  teacher        User         @relation(fields: [teacherId], references: [supabaseId])
+  teacherId      String
+  name           String
+  subject        String
+  language       String
+  targetAudience String
+  status         CourseStatus @default(GENERATING)
+  createdAt      DateTime     @default(now())
+
+  courseModules CourseModule[]
+  concepts      Concept[]
+  materials     CourseMaterial[]
+}
+
+model CourseModule {
+  id            Int          @id @default(autoincrement())
+  course        Course       @relation(fields: [courseId], references: [id])
+  courseId      Int
+  name          String
+  order         Int
+  whyThisModule String?      // populated by Pass 1 — null until generation runs
+  buildsOn      String?
+  leadsInto     String?
+  reviewStatus  ReviewStatus @default(UNREVIEWED)
+
+  objectives     LearningObjective[]
+  outcomes       LearningOutcome[]
+  exercises      Exercise[]
+  conceptLinks   ModuleConcept[]
+  materialLinks  CourseMaterialModule[]
+}
+
+model LearningObjective {
+  id             Int          @id @default(autoincrement())
+  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id])
+  courseModuleId Int
+  text           String
+
+  outcomeLinks OutcomeObjective[]
+}
+
+model LearningOutcome {
+  id             Int          @id @default(autoincrement())
+  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id])
+  courseModuleId Int
+  text           String
+
+  objectiveLinks OutcomeObjective[]
+  conceptLinks   ConceptOutcome[]
+}
+
+model OutcomeObjective {
+  outcome         LearningOutcome   @relation(fields: [outcomeId], references: [id])
+  outcomeId       Int
+  objective       LearningObjective @relation(fields: [objectiveId], references: [id])
+  objectiveId     Int
+
+  @@id([outcomeId, objectiveId])
+}
+
+model Concept {
+  id       Int    @id @default(autoincrement())
+  course   Course @relation(fields: [courseId], references: [id])
+  courseId Int
+  name     String
+
+  outcomeLinks ConceptOutcome[]
+  moduleLinks  ModuleConcept[]
+  theoryBlocks TheoryBlock[]
+  exerciseLinks ExerciseConcept[]
+}
+
+model ConceptOutcome {
+  concept   Concept         @relation(fields: [conceptId], references: [id])
+  conceptId Int
+  outcome   LearningOutcome @relation(fields: [outcomeId], references: [id])
+  outcomeId Int
+
+  @@id([conceptId, outcomeId])
+}
+
+model ModuleConcept {
+  module    CourseModule @relation(fields: [moduleId], references: [id])
+  moduleId  Int
+  concept   Concept      @relation(fields: [conceptId], references: [id])
+  conceptId Int
+  order     Int
+
+  @@id([moduleId, conceptId])
+}
+
+model TheoryBlock {
+  id              Int     @id @default(autoincrement())
+  concept         Concept @relation(fields: [conceptId], references: [id])
+  conceptId       Int
+  content         String
+  order           Int
+  pendingRevision Boolean @default(false)
+}
+
+model Exercise {
+  id             Int          @id @default(autoincrement())
+  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id])
+  courseModuleId Int
+  type           ExerciseType
+  question       String
+  order          Int
+  pendingRevision Boolean     @default(false)
+  options        Json?        // MULTIPLE_CHOICE: array of 4 strings
+  correctIndex   Int?         // MULTIPLE_CHOICE: 0–3
+  explanation    String?      // MULTIPLE_CHOICE: shown after answering
+  sampleAnswer   String?      // FREE_TEXT: reference answer for grading LLM
+  rubric         String?      // FREE_TEXT: grading criteria
+
+  conceptLinks ExerciseConcept[]
+}
+
+model ExerciseConcept {
+  exercise   Exercise @relation(fields: [exerciseId], references: [id])
+  exerciseId Int
+  concept    Concept  @relation(fields: [conceptId], references: [id])
+  conceptId  Int
+
+  @@id([exerciseId, conceptId])
+}
+
+model CourseMaterial {
+  id         Int          @id @default(autoincrement())
+  course     Course       @relation(fields: [courseId], references: [id])
+  courseId   Int
+  type       MaterialType
+  filename   String?      // FILE only
+  storageKey String?      // FILE only
+  title      String?      // LINK only
+  url        String?      // LINK only
+
+  moduleLinks CourseMaterialModule[]
+}
+
+model CourseMaterialModule {
+  material   CourseMaterial @relation(fields: [materialId], references: [id])
+  materialId Int
+  module     CourseModule   @relation(fields: [moduleId], references: [id])
+  moduleId   Int
+
+  @@id([materialId, moduleId])
 }
