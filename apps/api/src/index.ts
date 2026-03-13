@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import usersRouter from './routes/users'
+import coursesRouter from './routes/courses'
 
 dotenv.config()
 
@@ -16,6 +17,7 @@ app.get('/health', (_req, res) => {
 })
 
 app.use('/api/users', usersRouter)
+app.use('/api/courses', coursesRouter)
 
 app.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`)

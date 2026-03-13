@@ -15,6 +15,7 @@ enum Role {
 
 enum CourseStatus {
   GENERATING
+  FAILED
   DRAFT
   PUBLISHED
   UNPUBLISHED
@@ -65,11 +66,11 @@ model Course {
 
 model CourseModule {
   id            Int          @id @default(autoincrement())
-  course        Course       @relation(fields: [courseId], references: [id])
+  course        Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId      Int
   name          String
   order         Int
-  whyThisModule String?      // populated by Pass 1 — null until generation runs
+  whyThisModule String?
   buildsOn      String?
   leadsInto     String?
   reviewStatus  ReviewStatus @default(UNREVIEWED)
@@ -83,7 +84,7 @@ model CourseModule {
 
 model LearningObjective {
   id             Int          @id @default(autoincrement())
-  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id])
+  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
   courseModuleId Int
   text           String
 
@@ -92,7 +93,7 @@ model LearningObjective {
 
 model LearningOutcome {
   id             Int          @id @default(autoincrement())
-  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id])
+  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
   courseModuleId Int
   text           String
 
@@ -101,9 +102,9 @@ model LearningOutcome {
 }
 
 model OutcomeObjective {
-  outcome         LearningOutcome   @relation(fields: [outcomeId], references: [id])
+  outcome         LearningOutcome   @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
   outcomeId       Int
-  objective       LearningObjective @relation(fields: [objectiveId], references: [id])
+  objective       LearningObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
   objectiveId     Int
 
   @@id([outcomeId, objectiveId])
@@ -111,29 +112,29 @@ model OutcomeObjective {
 
 model Concept {
   id       Int    @id @default(autoincrement())
-  course   Course @relation(fields: [courseId], references: [id])
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId Int
   name     String
 
-  outcomeLinks ConceptOutcome[]
-  moduleLinks  ModuleConcept[]
-  theoryBlocks TheoryBlock[]
+  outcomeLinks  ConceptOutcome[]
+  moduleLinks   ModuleConcept[]
+  theoryBlocks  TheoryBlock[]
   exerciseLinks ExerciseConcept[]
 }
 
 model ConceptOutcome {
-  concept   Concept         @relation(fields: [conceptId], references: [id])
+  concept   Concept         @relation(fields: [conceptId], references: [id], onDelete: Cascade)
   conceptId Int
-  outcome   LearningOutcome @relation(fields: [outcomeId], references: [id])
+  outcome   LearningOutcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
   outcomeId Int
 
   @@id([conceptId, outcomeId])
 }
 
 model ModuleConcept {
-  module    CourseModule @relation(fields: [moduleId], references: [id])
+  module    CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   moduleId  Int
-  concept   Concept      @relation(fields: [conceptId], references: [id])
+  concept   Concept      @relation(fields: [conceptId], references: [id], onDelete: Cascade)
   conceptId Int
   order     Int
 
@@ -142,7 +143,7 @@ model ModuleConcept {
 
 model TheoryBlock {
   id              Int     @id @default(autoincrement())
-  concept         Concept @relation(fields: [conceptId], references: [id])
+  concept         Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
   conceptId       Int
   content         String
   order           Int
@@ -150,26 +151,26 @@ model TheoryBlock {
 }
 
 model Exercise {
-  id             Int          @id @default(autoincrement())
-  courseModule   CourseModule @relation(fields: [courseModuleId], references: [id])
-  courseModuleId Int
-  type           ExerciseType
-  question       String
-  order          Int
-  pendingRevision Boolean     @default(false)
-  options        Json?        // MULTIPLE_CHOICE: array of 4 strings
-  correctIndex   Int?         // MULTIPLE_CHOICE: 0–3
-  explanation    String?      // MULTIPLE_CHOICE: shown after answering
-  sampleAnswer   String?      // FREE_TEXT: reference answer for grading LLM
-  rubric         String?      // FREE_TEXT: grading criteria
+  id              Int          @id @default(autoincrement())
+  courseModule    CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  courseModuleId  Int
+  type            ExerciseType
+  question        String
+  order           Int
+  pendingRevision Boolean      @default(false)
+  options         Json?        // MULTIPLE_CHOICE: array of 4 strings
+  correctIndex    Int?         // MULTIPLE_CHOICE: 0–3
+  explanation     String?      // MULTIPLE_CHOICE: shown after answering
+  sampleAnswer    String?      // FREE_TEXT: reference answer for grading LLM
+  rubric          String?      // FREE_TEXT: grading criteria
 
   conceptLinks ExerciseConcept[]
 }
 
 model ExerciseConcept {
-  exercise   Exercise @relation(fields: [exerciseId], references: [id])
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   exerciseId Int
-  concept    Concept  @relation(fields: [conceptId], references: [id])
+  concept    Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
   conceptId  Int
 
   @@id([exerciseId, conceptId])
@@ -177,7 +178,7 @@ model ExerciseConcept {
 
 model CourseMaterial {
   id         Int          @id @default(autoincrement())
-  course     Course       @relation(fields: [courseId], references: [id])
+  course     Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId   Int
   type       MaterialType
   filename   String?      // FILE only
@@ -189,9 +190,9 @@ model CourseMaterial {
 }
 
 model CourseMaterialModule {
-  material   CourseMaterial @relation(fields: [materialId], references: [id])
+  material   CourseMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
   materialId Int
-  module     CourseModule   @relation(fields: [moduleId], references: [id])
+  module     CourseModule   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   moduleId   Int
 
   @@id([materialId, moduleId])

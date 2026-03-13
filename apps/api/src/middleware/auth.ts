@@ -33,6 +33,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return res.status(400).json({ error: 'User email not found' })
   }
 
+  if (!user.id) {
+    return res.status(400).json({ error: 'User ID not found' })
+  }
+
     // n success: attach { id, email } to req.user and call next()
     req.user = { id: user.id, email: user.email }
     next() // call next() to pass control to the next middleware or route handler. If we don't, the request will stop here.
