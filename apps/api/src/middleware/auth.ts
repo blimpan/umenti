@@ -16,18 +16,18 @@ declare global {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-    // Extract the Bearer token from the Authorization header
-    const bearerToken = req.headers.authorization?.split(' ')[1] // we do this because the header is in the format "Bearer <token>"
-    if (!bearerToken) {
-      return res.status(401).json({ error: 'Missing Authorization header' })
-    }
+  // Extract the Bearer token from the Authorization header
+  const bearerToken = req.headers.authorization?.split(' ')[1] // we do this because the header is in the format "Bearer <token>"
+  if (!bearerToken) {
+    return res.status(401).json({ error: 'Missing Authorization header' })
+  }
 
-    // Call supabase.auth.getUser(token) to verify it
-    const { data: { user }, error } = await supabase.auth.getUser(bearerToken)
-    if (error || !user) { 
-        // On failure (missing token, invalid token, Supabase error): return 401
-        return res.status(401).json({ error: 'Invalid token' })
-    }
+  // Call supabase.auth.getUser(token) to verify it
+  const { data: { user }, error } = await supabase.auth.getUser(bearerToken)
+  if (error || !user) { 
+      // On failure (missing token, invalid token, Supabase error): return 401
+      return res.status(401).json({ error: 'Invalid token' })
+  }
   
   if (!user.email) { 
     return res.status(400).json({ error: 'User email not found' })

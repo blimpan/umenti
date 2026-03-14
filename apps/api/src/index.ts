@@ -3,6 +3,9 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import usersRouter from './routes/users'
 import coursesRouter from './routes/courses'
+import contentRouter from './routes/content'
+import enrollmentsRouter from './routes/enrollments'
+import studentRouter from './routes/student'
 
 dotenv.config()
 
@@ -18,6 +21,9 @@ app.get('/health', (_req, res) => {
 
 app.use('/api/users', usersRouter)
 app.use('/api/courses', coursesRouter)
+app.use('/api/content', contentRouter)
+app.use('/api/enrollments', enrollmentsRouter)
+app.use('/api/student', studentRouter)
 
 app.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`)

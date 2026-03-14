@@ -105,9 +105,40 @@ export type CourseDetail = {
   id: number
   name: string
   subject: string
+  language: string
+  targetAudience: string
   status: CourseStatus
   modules: CourseModule[]
 }
+
+// --- Enrollments ---
+
+export type EnrollmentStatus = 'PENDING' | 'ACTIVE' | 'REJECTED'
+
+export type CourseEnrollment = {
+  id: number
+  email: string
+  status: EnrollmentStatus
+  userId: string | null
+  createdAt: string
+}
+
+export type GetEnrollmentsResponse = CourseEnrollment[]
+
+export type StudentCourseItem = {
+  enrollmentId: number
+  enrollmentStatus: 'PENDING' | 'ACTIVE'
+  course: {
+    id: number
+    name: string
+    subject: string
+    status: CourseStatus
+  }
+}
+
+export type GetStudentCoursesResponse = StudentCourseItem[]
+
+// --- Users ---
 
 export const Role = {
     TEACHER: 'TEACHER',

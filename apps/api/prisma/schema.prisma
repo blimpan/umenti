@@ -29,6 +29,12 @@ enum ReviewStatus {
   REJECTED
 }
 
+enum EnrollmentStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
 enum ExerciseType {
   MULTIPLE_CHOICE
   FREE_TEXT
@@ -45,7 +51,8 @@ model User {
   role       Role
   createdAt  DateTime @default(now())
 
-  courses Course[]
+  courses     Course[]
+  enrollments Enrollment[]
 }
 
 model Course {
@@ -62,6 +69,20 @@ model Course {
   courseModules CourseModule[]
   concepts      Concept[]
   materials     CourseMaterial[]
+  enrollments   Enrollment[]
+}
+
+model Enrollment {
+  id        Int              @id @default(autoincrement())
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId  Int
+  email     String
+  user      User?            @relation(fields: [userId], references: [supabaseId])
+  userId    String?
+  status    EnrollmentStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+
+  @@unique([courseId, email])
 }
 
 model CourseModule {

@@ -35,20 +35,31 @@ export default function StudentsSection({ courseId }: Props) {
     e.preventDefault()
     setError(null)
 
-    // TODO(human): Implement the invite submission.
-    //
-    // 1. Set loading = true.
-    // 2. Get the auth token using getToken() (already defined above).
-    // 3. POST to `${API}/api/courses/${courseId}/enrollments` with body { email },
-    //    Authorization header, and Content-Type: application/json.
-    // 4. If res.status === 201:
-    //    - Parse the response JSON to get the new enrollment id and status.
-    //    - Add a new CourseEnrollment to the enrollments state:
-    //      { id, email, status, userId: null, createdAt: new Date().toISOString() }
-    //    - Clear the email input (setEmail('')).
-    // 5. If res.status === 409: setError('This email has already been invited').
-    // 6. Any other non-ok status: setError('Failed to send invitation').
-    // 7. Set loading = false.
+    setLoading(true)
+    try {
+      const authToken = await getToken()
+      const res = await fetch(`${API}/api/courses/${courseId}/enrollments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ email }),
+      })
+
+      if (res.status === 201 || res.status === 200) {
+        const { id, status } = await res.json()
+        setEnrollments([{ id, email, status, userId: null, createdAt: new Date().toISOString() }, ...enrollments])
+        setEmail('')
+      } else if (res.status === 409) {
+        setError('This email has already been invited')
+      } else {
+        setError('Failed to send invitation')
+        console.error('Failed to send invitation:', res.status, res.statusText)
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const active = enrollments.filter(e => e.status === 'ACTIVE')
