@@ -1,5 +1,9 @@
 import CourseWizard from '@/components/wizard/CourseWizard'
 
 export default function NewCoursePage() {
-  return <CourseWizard />
+  return (
+    <div className="p-8">
+      <CourseWizard />
+    </div>
+  )
 }

@@ -11,7 +11,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   return (
     <div className="flex min-h-screen">
       <Sidebar role="TEACHER" />
-      <main className="flex-1 p-8">
+      <main className="flex-1 min-w-0">
         {children}
       </main>
     </div>

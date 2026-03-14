@@ -15,7 +15,7 @@ export default async function MyCoursesPage() {
   const courses: GetCoursesResponse = res.ok ? await res.json() : []
 
   return (
-    <>
+    <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold">My courses</h1>
         <Link
@@ -28,7 +28,11 @@ export default async function MyCoursesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {courses.map((course) => (
-          <div key={course.id} className="rounded-xl border border-gray-200 p-6 space-y-3">
+          <Link
+            key={course.id}
+            href={`/teacher/courses/${course.id}`}
+            className="rounded-xl border border-gray-200 p-6 space-y-3 hover:border-primary/40 hover:shadow-sm transition-all block"
+          >
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="font-semibold">{course.name}</p>
@@ -42,7 +46,7 @@ export default async function MyCoursesPage() {
               </p>
               <DeleteCourseButton courseId={course.id} />
             </div>
-          </div>
+          </Link>
         ))}
 
         {courses.length === 0 && (
@@ -55,7 +59,7 @@ export default async function MyCoursesPage() {
           </Link>
         )}
       </div>
-    </>
+    </div>
   )
 }
 
