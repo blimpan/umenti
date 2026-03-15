@@ -217,6 +217,7 @@ export default function ModuleEditor({ module, courseId }: Props) {
                     value={block.content}
                     onSave={(v) => patch(`/api/content/theory-blocks/${block.id}`, { content: v })}
                     multiline
+                    markdown
                     className="text-sm text-gray-700 leading-relaxed w-full"
                     placeholder="Theory content..."
                   />
