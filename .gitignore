@@ -16,5 +16,9 @@ dist/
 .env.local
 .env*.local
 
+# Dev logs
+apps/api/logs/
+
 # Misc
 .DS_Store
+.worktrees/
