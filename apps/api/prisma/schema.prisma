@@ -256,6 +256,7 @@ model Exercise {
   explanation         String?
   sampleAnswer        String?
   rubric              String?
+  canonicalExpressions Json?       // Array<{ label: string, sympyExpr: string | null }>
   visualizationHtml   String?      // used when type = INTERACTIVE
   targetState         Json?        // server-only; never sent to client
   visualizationType   String?
