@@ -28,6 +28,12 @@ export const MathNode = Node.create<MathNodeOptions>({
     return ['span', mergeAttributes(HTMLAttributes, { 'data-math': '' })]
   },
 
+  // TipTap v3: controls what text/plain contains when this node is copied.
+  // Without this, copying a math chip produces empty text.
+  renderText({ node }) {
+    return `$${node.attrs.latex as string}$`
+  },
+
   addNodeView() {
     return ReactNodeViewRenderer(MathNodeView)
   },
