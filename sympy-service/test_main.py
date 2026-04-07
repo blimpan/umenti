@@ -52,6 +52,35 @@ class TestCheckEquivalence:
         assert r.status_code == 200
         assert r.json()['equivalent'] is True
 
+class TestIntervalRoundTrip:
+    def test_open_interval_round_trips(self):
+        """Normalize (0, \\infty) then check equivalence with itself — must be true."""
+        r = client.post('/normalize', json={'latex': r'(0, \infty)'})
+        assert r.status_code == 200
+        sympy_expr = r.json()['sympyExpr']
+        r2 = client.post('/check-equivalence', json={'exprA': sympy_expr, 'exprB': sympy_expr})
+        assert r2.status_code == 200
+        assert r2.json()['equivalent'] is True
+
+    def test_half_open_interval_round_trips(self):
+        """Normalize (0, 1] then check equivalence with itself — must be true."""
+        r = client.post('/normalize', json={'latex': r'(0, 1]'})
+        assert r.status_code == 200
+        sympy_expr = r.json()['sympyExpr']
+        r2 = client.post('/check-equivalence', json={'exprA': sympy_expr, 'exprB': sympy_expr})
+        assert r2.status_code == 200
+        assert r2.json()['equivalent'] is True
+
+class TestSimplifyTimeout:
+    def test_basic_equivalence_still_works_with_process_executor(self):
+        """Ensure the ProcessPoolExecutor wrapper doesn't break basic equivalence."""
+        r = client.post('/check-equivalence', json={
+            'exprA': 'x**2 + 2*x + 1',
+            'exprB': '(x + 1)**2',
+        })
+        assert r.status_code == 200
+        assert r.json()['equivalent'] is True
+
 class TestEvaluateAtPoints:
     def test_equal_functions_at_points(self):
         r = client.post('/evaluate-at-points', json={

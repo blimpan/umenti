@@ -1,6 +1,7 @@
 # sympy-service/main.py
 import re
 import sympy
+import concurrent.futures
 from sympy import oo, S, Interval, Symbol
 from sympy.parsing.latex import parse_latex
 from sympy.parsing.sympy_parser import parse_expr
@@ -54,7 +55,9 @@ def _try_parse_interval(latex: str):
     try:
         a = _parse_bound(a_str)
         b = _parse_bound(b_str)
-        return Interval(a, b, left_open=(l_paren == '('), right_open=(r_paren == ')'))
+        lo = (l_paren == '(')
+        ro = (r_paren == ')')
+        return f"Interval({str(a)}, {str(b)}, {sympy.true if lo else sympy.false}, {sympy.true if ro else sympy.false})"
     except Exception:
         return None
 
@@ -70,12 +73,14 @@ def latex_to_sympy_str(latex: str) -> str:
     _validate_latex_structure(latex)
     interval = _try_parse_interval(latex)
     if interval is not None:
-        return str(interval)
+        return interval
     expr = parse_latex(latex)
     return str(expr)
 
 _SAFE_LOCALS = {name: getattr(sympy, name) for name in dir(sympy) if not name.startswith('_')}
 _SAFE_LOCALS['S'] = S
+_SAFE_LOCALS['true'] = sympy.true
+_SAFE_LOCALS['false'] = sympy.false
 
 def _parse_sympy_str(expr_str: str):
     if expr_str.startswith('S.'):
@@ -91,6 +96,11 @@ def normalize(req: NormalizeRequest):
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+def _simplify_diff(a, b):
+    """Run in a separate process to allow timeout."""
+    diff = sympy.simplify(a - b)
+    return diff == 0
+
 @app.post('/check-equivalence', response_model=EquivalenceResponse)
 def check_equivalence(req: EquivalenceRequest):
     try:
@@ -98,8 +108,13 @@ def check_equivalence(req: EquivalenceRequest):
         b = _parse_sympy_str(req.exprB)
         if isinstance(a, sympy.Set) and isinstance(b, sympy.Set):
             return EquivalenceResponse(equivalent=bool(a == b))
-        diff = sympy.simplify(a - b)
-        return EquivalenceResponse(equivalent=bool(diff == 0))
+        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_simplify_diff, a, b)
+            try:
+                equivalent = future.result(timeout=5)
+                return EquivalenceResponse(equivalent=bool(equivalent))
+            except concurrent.futures.TimeoutError:
+                return EquivalenceResponse(equivalent=False, error="simplify timed out")
     except Exception as exc:
         return EquivalenceResponse(equivalent=False, error=str(exc))
 
