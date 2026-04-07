@@ -12,9 +12,10 @@ const LANGUAGES = ['English', 'Swedish', 'Norwegian', 'Danish', 'Finnish', 'Germ
 type Props = {
   form: UseFormReturn<CourseWizardInput>
   onNext: () => void
+  onBack?: () => void
 }
 
-export default function StepBasics({ form, onNext }: Props) {
+export default function StepBasics({ form, onNext, onBack }: Props) {
   const { register, control, formState: { errors }, watch, setValue } = form
   const name = watch('name')
   const subject = watch('subject')
@@ -78,7 +79,12 @@ export default function StepBasics({ form, onNext }: Props) {
         </Field>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        {onBack ? (
+          <Button variant="outline" onClick={onBack}>Back</Button>
+        ) : (
+          <span />
+        )}
         <Button onClick={onNext}>Next</Button>
       </div>
     </div>
