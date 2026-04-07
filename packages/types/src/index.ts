@@ -101,6 +101,11 @@ export type CourseConcept = {
   visualizations: ConceptVisualization[]
 }
 
+export type CanonicalExpression = {
+  label: string
+  sympyExpr: string | null   // null = LLM-only claim; SymPy could not normalize
+}
+
 export type CourseExercise = {
   id: number
   type: 'MULTIPLE_CHOICE' | 'FREE_TEXT' | 'INTERACTIVE'
@@ -115,6 +120,7 @@ export type CourseExercise = {
   // FREE_TEXT
   sampleAnswer: string | null
   rubric: string | null
+  canonicalExpressions: CanonicalExpression[] | null  // null = not yet extracted
   // INTERACTIVE / legacy
   visualizationHtml: string | null
   visualizationType: string | null            // new
