@@ -28,6 +28,10 @@ export const MathNode = Node.create<MathNodeOptions>({
     return ['span', mergeAttributes(HTMLAttributes, { 'data-math': '' })]
   },
 
+  renderText({ node }) {
+    return `$${node.attrs.latex as string}$`
+  },
+
   addNodeView() {
     return ReactNodeViewRenderer(MathNodeView)
   },
