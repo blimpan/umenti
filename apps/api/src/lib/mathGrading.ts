@@ -113,7 +113,8 @@ async function gradeClaimWithLlm(
       }],
     })
     return (output as z.infer<typeof LlmClaimSchema>).correct
-  } catch {
+  } catch (err) {
+    llmLogger.warn({ err, label }, '[math-grading] per-claim LLM fallback failed — marking incorrect')
     return false
   }
 }
