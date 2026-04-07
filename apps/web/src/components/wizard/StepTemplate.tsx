@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -26,6 +26,7 @@ export default function StepTemplate({ onConfirm, onBack }: Props) {
   const [templateId, setTemplateId] = useState<number | null>(null)
   const [fullTemplate, setFullTemplate] = useState<CurriculumTemplateFull | null>(null)
   const [fetchingFull, setFetchingFull] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     apiFetch(`${API}/api/templates/meta`)
@@ -60,13 +61,18 @@ export default function StepTemplate({ onConfirm, onBack }: Props) {
     setTemplateId(id)
     setFullTemplate(null)
     setFetchingFull(true)
-    apiFetch(`${API}/api/templates/${id}`)
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    apiFetch(`${API}/api/templates/${id}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data: CurriculumTemplateFull) => {
         setFullTemplate(data)
         setFetchingFull(false)
       })
-      .catch(() => setFetchingFull(false))
+      .catch((err) => {
+        if (err?.name !== 'AbortError') setFetchingFull(false)
+      })
   }
 
   return (
@@ -144,7 +150,7 @@ export default function StepTemplate({ onConfirm, onBack }: Props) {
           <div className="flex flex-wrap gap-2">
             {fullTemplate.modules.map((m) => (
               <span
-                key={m.name}
+                key={m.order}
                 className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
               >
                 {m.name}
