@@ -36,3 +36,36 @@ export function tokenizeMathText(text: string): MathToken[] {
 
   return tokens
 }
+
+/**
+ * Rewrites a DocumentFragment that may contain KaTeX-rendered math by
+ * replacing each .katex span with its LaTeX source as $latex$ or $$latex$$.
+ *
+ * Returns the resulting textContent, or null if no math was found or replaced
+ * (so the caller knows not to intercept the copy event).
+ *
+ * Browser-only — relies on the global `document` to create text nodes.
+ */
+export function rewriteFragmentForCopy(fragment: DocumentFragment): string | null {
+  const katexSpans = Array.from(fragment.querySelectorAll('.katex'))
+
+  if (katexSpans.length === 0) return null
+
+  let replaced = 0
+
+  for (const span of katexSpans) {
+    const annotation = span.querySelector('annotation[encoding="application/x-tex"]')
+    if (!annotation) continue
+
+    const latex = annotation.textContent ?? ''
+    const isDisplay = span.closest('.katex-display') !== null
+    const text = isDisplay ? `$$${latex}$$` : `$${latex}$`
+
+    span.parentNode?.replaceChild(document.createTextNode(text), span)
+    replaced++
+  }
+
+  if (replaced === 0) return null
+
+  return fragment.textContent
+}

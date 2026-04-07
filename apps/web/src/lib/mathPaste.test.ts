@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { tokenizeMathText } from './mathPaste'
+import { tokenizeMathText, rewriteFragmentForCopy } from './mathPaste'
 
 describe('tokenizeMathText', () => {
   it('returns a single text token for plain text with no math', () => {
@@ -50,5 +51,42 @@ describe('tokenizeMathText', () => {
     expect(tokenizeMathText('$  x + 1  $')).toEqual([
       { type: 'math', latex: 'x + 1' },
     ])
+  })
+})
+
+function makeFragment(html: string): DocumentFragment {
+  return document.createRange().createContextualFragment(html)
+}
+
+describe('rewriteFragmentForCopy', () => {
+  it('returns null when no .katex elements present', () => {
+    const fragment = makeFragment('<p>plain text</p>')
+    expect(rewriteFragmentForCopy(fragment)).toBeNull()
+  })
+
+  it('replaces inline .katex span with $latex$', () => {
+    const fragment = makeFragment(
+      'before <span class="katex"><math><semantics><annotation encoding="application/x-tex">a \\neq 0</annotation></semantics></math></span> after'
+    )
+    expect(rewriteFragmentForCopy(fragment)).toBe('before $a \\neq 0$ after')
+  })
+
+  it('uses $$latex$$ for .katex inside .katex-display', () => {
+    const fragment = makeFragment(
+      '<span class="katex-display"><span class="katex"><math><semantics><annotation encoding="application/x-tex">\\frac{x}{2}</annotation></semantics></math></span></span>'
+    )
+    expect(rewriteFragmentForCopy(fragment)).toBe('$$\\frac{x}{2}$$')
+  })
+
+  it('handles multiple .katex spans', () => {
+    const fragment = makeFragment(
+      'x = <span class="katex"><math><semantics><annotation encoding="application/x-tex">a</annotation></semantics></math></span> and y = <span class="katex"><math><semantics><annotation encoding="application/x-tex">b</annotation></semantics></math></span>'
+    )
+    expect(rewriteFragmentForCopy(fragment)).toBe('x = $a$ and y = $b$')
+  })
+
+  it('returns null when .katex exists but has no annotation element', () => {
+    const fragment = makeFragment('<span class="katex"><span class="katex-html">x</span></span>')
+    expect(rewriteFragmentForCopy(fragment)).toBeNull()
   })
 })
