@@ -338,3 +338,41 @@ export type RichMessage = {
   plainText: string            // extracted plain text — used as LLM input
   attachments: ImageAttachment[]
 }
+
+// --- Curriculum templates ---
+
+export type TemplateMetaTemplate = {
+  id: number
+  name: string
+  grade: string
+}
+
+export type TemplateMetaSubject = {
+  subject: string
+  templates: TemplateMetaTemplate[]
+}
+
+export type TemplateMetaCountry = {
+  country: string
+  subjects: TemplateMetaSubject[]
+}
+
+export type GetTemplatesMetaResponse = TemplateMetaCountry[]
+
+export type CurriculumTemplateModule = {
+  name: string
+  order: number
+  objectives: { text: string }[]
+  outcomes: { text: string }[]
+}
+
+export type CurriculumTemplateFull = {
+  id: number
+  country: string
+  subject: string
+  grade: string
+  name: string
+  language: string
+  targetAudience: string
+  modules: CurriculumTemplateModule[]
+}
