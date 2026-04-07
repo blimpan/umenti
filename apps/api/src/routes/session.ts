@@ -8,6 +8,8 @@ import { applyDecay } from '../lib/decay'
 import { getModel } from '../lib/llm'
 import { gradeVizState } from '../lib/vizGrading'
 import { GetSessionResponse, StudentExercise, SseEvent } from '@metis/types'
+import { gradeMathExercise } from '../lib/mathGrading'
+import type { CanonicalExpression } from '@metis/types'
 import { logger, llmLogger } from '../lib/logger'
 
 // mergeParams: true makes :courseId and :moduleId from the parent route available here
@@ -466,12 +468,30 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
         }
       }
     } else {
-      savedGrading = await gradeFreeText(
-        exercise.question,
-        exercise.sampleAnswer ?? '',
-        exercise.rubric ?? '',
-        String(answer),
-      )
+      const canonical = exercise.canonicalExpressions as CanonicalExpression[] | null
+
+      if (canonical && canonical.length > 0) {
+        // Deterministic math grading; fall back to LLM grader if it returns null
+        savedGrading = await gradeMathExercise(
+          exercise.question,
+          canonical,
+          exercise.rubric ?? '',
+          String(answer),
+        ) ?? await gradeFreeText(
+          exercise.question,
+          exercise.sampleAnswer ?? '',
+          exercise.rubric ?? '',
+          String(answer),
+        )
+      } else {
+        savedGrading = await gradeFreeText(
+          exercise.question,
+          exercise.sampleAnswer ?? '',
+          exercise.rubric ?? '',
+          String(answer),
+        )
+      }
+
       if (!savedGrading) {
         sseOpen(res)
         sseEmit(res, { type: 'system:message', payload: { content: 'Grading failed — please try again.' } })
