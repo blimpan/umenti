@@ -12,6 +12,7 @@ import enrollmentsRouter from './routes/enrollments'
 import studentRouter from './routes/student'
 import sessionRouter from './routes/session'
 import wizardRouter from './routes/wizard'
+import templatesRouter from './routes/templates'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -39,6 +40,7 @@ app.use('/api/enrollments', enrollmentsRouter)
 app.use('/api/student', studentRouter)
 app.use('/api/student/courses/:courseId/modules/:moduleId/session', sessionRouter)
 app.use('/api/wizard', wizardRouter)
+app.use('/api/templates', templatesRouter)
 
 initJWKS().then(() => {
   app.listen(PORT, () => {
