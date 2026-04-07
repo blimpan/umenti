@@ -113,6 +113,7 @@ export default function CourseWizard() {
     router.push('/teacher/courses')
   }
 
+  // useTemplate is null before StepStart resolves; default to scratch labels until then
   const steps = useTemplate ? TEMPLATE_STEPS : SCRATCH_STEPS
   const currentStepName = getStepName(step, useTemplate)
   const { isSubmitting } = form.formState
