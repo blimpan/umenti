@@ -353,3 +353,40 @@ model ChatMessage {
 
   @@index([sessionId])
 }
+
+model CurriculumTemplate {
+  id             Int                      @id @default(autoincrement())
+  country        String
+  subject        String
+  grade          String
+  name           String
+  language       String
+  targetAudience String
+  modules        CurriculumTemplateModule[]
+
+  @@index([country, subject])
+}
+
+model CurriculumTemplateModule {
+  id         Int                    @id @default(autoincrement())
+  templateId Int
+  template   CurriculumTemplate     @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name       String
+  order      Int
+  objectives TemplateObjective[]
+  outcomes   TemplateOutcome[]
+}
+
+model TemplateObjective {
+  id       Int                      @id @default(autoincrement())
+  moduleId Int
+  module   CurriculumTemplateModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  text     String
+}
+
+model TemplateOutcome {
+  id       Int                      @id @default(autoincrement())
+  moduleId Int
+  module   CurriculumTemplateModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  text     String
+}
