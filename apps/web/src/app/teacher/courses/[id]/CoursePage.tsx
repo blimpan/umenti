@@ -4,12 +4,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CourseDetail, CourseStatus } from '@metis/types'
-import { createClient } from '@/lib/supabase/client'
+import { apiFetch } from '@/lib/api'
 import OverviewTab from './OverviewTab'
 import ContentTab from './ContentTab'
+import AnalyticsTab from './AnalyticsTab'
 import SettingsModal from './SettingsModal'
 
-type Tab = 'overview' | 'content'
+type Tab = 'overview' | 'content' | 'analytics'
 
 const STATUS_STYLES: Record<CourseStatus, string> = {
   GENERATING: 'bg-blue-50 text-blue-600',
@@ -38,14 +39,9 @@ export default function CoursePage({ course }: { course: CourseDetail }) {
 
   async function publishCourse() {
     setPublishing(true)
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses/${course.id}`, {
+    const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses/${course.id}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session!.access_token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'PUBLISHED' }),
     })
     setPublishing(false)
@@ -58,7 +54,7 @@ export default function CoursePage({ course }: { course: CourseDetail }) {
       {/* Header */}
       <header
         className={`flex items-center justify-between gap-4 ${
-          isFullBleed ? 'px-8 py-4 border-b bg-white shrink-0' : 'mb-6'
+          isFullBleed ? 'px-8 pt-8 pb-6 bg-white shrink-0' : 'mb-6'
         }`}
       >
         <div className="flex items-center gap-3 min-w-0">
@@ -98,9 +94,9 @@ export default function CoursePage({ course }: { course: CourseDetail }) {
 
       {/* Tab bar */}
       <div
-        className={`flex border-b ${isFullBleed ? 'px-8 bg-white shrink-0' : 'mb-8'}`}
+        className={`flex border-b mb-8 ${isFullBleed ? 'px-8 bg-white shrink-0' : ''}`}
       >
-        {(['overview', 'content'] as Tab[]).map((tab) => (
+        {(['overview', 'content', 'analytics'] as Tab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -125,6 +121,9 @@ export default function CoursePage({ course }: { course: CourseDetail }) {
           selectedModuleId={selectedModuleId}
           onSelectModule={setSelectedModuleId}
         />
+      )}
+      {activeTab === 'analytics' && (
+        <AnalyticsTab courseId={course.id} />
       )}
 
       {settingsOpen && (

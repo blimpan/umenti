@@ -66,7 +66,7 @@ type CourseWizardInput = {
     // subject, module objectives/outcomes, and targetAudience.
   }[]
 
-  teacherMaterials: (
+  materials?: (
     {
       type: 'file'
       filename: string
@@ -87,7 +87,7 @@ Note: concepts are a flat list within the module (not nested under outcomes) bec
 
 ---
 
-## 3. Generation pipeline (2-pass, module-sequential)
+## 3. Generation pipeline (3-pass, module-sequential)
 
 Generation is async. The teacher is redirected immediately after submitting; the course appears in "My Courses" with status `GENERATING` until complete.
 
@@ -108,7 +108,7 @@ type ModuleSkeleton = {
 
 Written to the DB immediately. Gives Pass 2 cross-module context so generated theory is coherent (e.g. "this is where students first encounter quadratics, referenced again in Module 5").
 
-### Pass 2 — Module generation (in order)
+### Pass 2 — Module concepts and theory (in order)
 
 Modules are generated sequentially (`module 1 -> module 2 -> ...`) to preserve pedagogical flow and stable concept identity.
 
@@ -124,19 +124,35 @@ For each module, run these steps in order:
 - Input includes module outcomes/objectives, module skeleton, and extracted `teacherMaterials` content.
 - The generated payload exposes theory as an ordered array of markdown paragraphs (`theoryBlocks: string[]`) per concept. Each element maps directly to one `TheoryBlock` DB record.
 
-3. Exercise generation (module-level)
-- Generate exercises for this module only.
-- Allowed concept links are restricted to concepts mapped to this module.
-- Associate each exercise to the concept entries it tests in the generated module payload.
-
 Output per module:
 
 ```ts
-type GeneratedModule = {
+type GeneratedModuleConcepts = {
   concepts: {
     id: string             // canonical concept ID (resolved or newly created)
     theoryBlocks: string[] // ordered markdown paragraphs → one TheoryBlock record each
   }[]
+}
+```
+
+### Pass 3 — Exercise generation (in order, after all concepts exist)
+
+Runs after Pass 2 completes for all modules, so the full concept graph for the course is available.
+
+For each module:
+- Query the module's concepts and their theory blocks from the DB
+- Generate exercises grounded in that theory
+- Allowed concept links are restricted to concepts mapped to this module
+- Associate each exercise to the concept entries it tests
+
+Running exercises in a separate pass means:
+- The LLM receives the actual generated theory as context (not just objectives)
+- All concept IDs are stable — no risk of an exercise referencing a concept that hasn't been created yet
+
+Output per module:
+
+```ts
+type GeneratedModuleExercises = {
   exercises: (Exercise & { conceptIds: [string, ...string[]] })[]  // at least one concept ID required
 }
 ```
@@ -189,7 +205,9 @@ See `apps/api/prisma/schema.prisma` for the full Prisma model definitions.
 ### Generation status enum
 
 ```
-GENERATING → DRAFT → PUBLISHED → ARCHIVED
+GENERATING → DRAFT → PUBLISHED → UNPUBLISHED → ARCHIVED
+                ↓
+             FAILED
 ```
 
 ### Module review status enum (used in course editor)
@@ -206,14 +224,46 @@ UNREVIEWED → IN_REVIEW → APPROVED
 
 ## 6. API endpoints
 
+### Course lifecycle (`/api/courses`)
+
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/courses` | Submit wizard — creates Course + triggers generation |
-| `GET` | `/api/courses` | List teacher's courses (dashboard) |
-| `GET` | `/api/courses/:id` | Full course with all modules, concepts, theory, exercises — **v1 only**; will need per-module fetching as courses grow |
-| `PATCH` | `/api/courses/:id/modules/:moduleId` | Update module fields (editor inline edit) |
-| `POST` | `/api/courses/:id/modules/:moduleId/concepts/:conceptId/theory/:blockId/revise` | Request AI revision of a theory block |
-| `POST` | `/api/courses/:id/modules/:moduleId/concepts/:conceptId/exercises/:exerciseId/revise` | Request AI revision of an exercise |
+| `POST` | `/api/courses` | Submit wizard — creates Course + triggers async generation |
+| `GET` | `/api/courses` | List teacher's own courses |
+| `GET` | `/api/courses/:id` | Full course with modules, concepts, theory, exercises — v1 only; will need per-module fetching as courses grow |
+| `PATCH` | `/api/courses/:id` | Update course status (`PUBLISHED` / `UNPUBLISHED` / `ARCHIVED`); publishing requires all modules `APPROVED` |
+| `DELETE` | `/api/courses/:id` | Delete course (teacher-owned only) |
+
+### Enrollments — teacher side (`/api/courses/:id/enrollments`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/courses/:id/enrollments` | Invite student by email; re-invite is allowed if previously `REJECTED` |
+| `GET` | `/api/courses/:id/enrollments` | List all `PENDING` and `ACTIVE` enrollments for the course |
+
+### Enrollments — student side (`/api/enrollments`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `PATCH` | `/api/enrollments/:id` | Accept (`ACTIVE`) or reject (`REJECTED`) a pending invitation |
+
+### Student courses (`/api/student`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/student/courses` | List all courses a student is enrolled in or invited to |
+
+### Content editing (`/api/content`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `PATCH` | `/api/content/modules/:id` | Update module fields: `name`, `whyThisModule`, `buildsOn`, `leadsInto`, `reviewStatus` |
+| `PATCH` | `/api/content/concepts/:id` | Rename a concept |
+| `PATCH` | `/api/content/theory-blocks/:id` | Edit theory block `content` and/or toggle `pendingRevision` |
+| `PATCH` | `/api/content/objectives/:id` | Edit objective `text` |
+| `PATCH` | `/api/content/outcomes/:id` | Edit outcome `text` |
+
+> **Not yet implemented:** AI revision endpoints (request rewrite of a specific theory block or exercise).
 
 ---
 

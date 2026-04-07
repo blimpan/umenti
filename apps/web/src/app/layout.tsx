@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Nunito } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 
 const nunitoFont = Nunito({
   subsets: ["latin"],
@@ -8,7 +10,7 @@ const nunitoFont = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Metis",
+  title: "Umenti",
   description: "The learning platform of the AI era.",
 };
 
@@ -23,6 +25,7 @@ export default function RootLayout({
         className={nunitoFont.className}
       >
         {children}
+        <Toaster position="bottom-right" richColors />
       </body>
     </html>
   );

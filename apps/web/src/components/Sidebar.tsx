@@ -5,21 +5,21 @@ import LogoutButton from './LogoutButton'
 const navItems: Record<Role, { label: string; href: string }[]> = {
   STUDENT: [
     { label: 'Dashboard', href: '/student/dashboard' },
-    { label: 'My Courses', href: '/courses' },
+    { label: 'My Courses', href: '/student/courses' },
+    { label: 'Review', href: '/student/review' },
     { label: 'Notifications', href: '/notifications' },
   ],
   TEACHER: [
     { label: 'Dashboard', href: '/teacher/dashboard' },
     { label: 'My Courses', href: '/teacher/courses' },
-    { label: 'Create Course', href: '/teacher/courses/new' },
   ],
 }
 
 export default function Sidebar({ role }: { role: Role }) {
   return (
     <aside className="w-56 shrink-0 h-screen sticky top-0 flex flex-col border-r border-gray-200 bg-white px-4 py-6">
-      <Link href="/" className="text-xl font-bold text-accent mb-8">
-        Metis
+      <Link href="/" className="text-xl font-bold text-accent-foreground px-3 mb-8">
+        Umenti
       </Link>
 
       <nav className="flex flex-col gap-1 flex-1">

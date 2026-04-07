@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Control, FieldErrors, UseFormRegister, useFieldArray } from 'react-hook-form'
+import { Control, FieldErrors, UseFormRegister, UseFormSetValue, useFieldArray, useWatch } from 'react-hook-form'
 import type { CourseWizardInput } from '@metis/types'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import SuggestedInput from './SuggestedInput'
 
 type Props = {
   nestIndex: number
@@ -12,9 +12,21 @@ type Props = {
   register: UseFormRegister<CourseWizardInput>
   errors: FieldErrors<CourseWizardInput>
   onRemove: () => void
+  setValue: UseFormSetValue<CourseWizardInput>
+  courseContext: { name: string; subject: string; targetAudience: string }
+  existingModuleNames: string[]
 }
 
-export default function ModuleItem({ nestIndex, control, register, errors, onRemove }: Props) {
+export default function ModuleItem({
+  nestIndex,
+  control,
+  register,
+  errors,
+  onRemove,
+  setValue,
+  courseContext,
+  existingModuleNames,
+}: Props) {
   const [expanded, setExpanded] = useState(true)
 
   const { fields: objectives, append: appendObjective, remove: removeObjective } = useFieldArray({
@@ -26,6 +38,9 @@ export default function ModuleItem({ nestIndex, control, register, errors, onRem
     control,
     name: `modules.${nestIndex}.outcomes`,
   })
+
+  const moduleName = useWatch({ control, name: `modules.${nestIndex}.name` }) ?? ''
+  const currentObjectives = useWatch({ control, name: `modules.${nestIndex}.objectives` }) ?? []
 
   const moduleErrors = errors.modules?.[nestIndex]
 
@@ -40,10 +55,15 @@ export default function ModuleItem({ nestIndex, control, register, errors, onRem
         >
           {expanded ? '▾' : '▸'}
         </button>
-        <Input
+        <SuggestedInput
           {...register(`modules.${nestIndex}.name`)}
+          field="module.name"
+          context={{ ...courseContext, existingModuleNames }}
           placeholder="Module name, e.g. Market Equilibrium"
           className="flex-1"
+          onAccept={(val) =>
+            setValue(`modules.${nestIndex}.name`, val, { shouldValidate: true })
+          }
         />
         <button
           type="button"
@@ -68,10 +88,17 @@ export default function ModuleItem({ nestIndex, control, register, errors, onRem
             <p className="text-xs text-gray-400">What is the goal of this module?</p>
             {objectives.map((obj, i) => (
               <div key={obj.id} className="flex items-center gap-2">
-                <Input
+                <SuggestedInput
                   {...register(`modules.${nestIndex}.objectives.${i}.text`)}
+                  field="module.objective"
+                  context={{ ...courseContext, moduleName }}
                   placeholder="e.g. Understanding market equilibrium"
                   className="flex-1"
+                  onAccept={(val) =>
+                    setValue(`modules.${nestIndex}.objectives.${i}.text`, val, {
+                      shouldValidate: true,
+                    })
+                  }
                 />
                 <button
                   type="button"
@@ -105,10 +132,21 @@ export default function ModuleItem({ nestIndex, control, register, errors, onRem
             <p className="text-xs text-gray-400">How will mastery be measured?</p>
             {outcomes.map((outcome, i) => (
               <div key={outcome.id} className="flex items-center gap-2">
-                <Input
+                <SuggestedInput
                   {...register(`modules.${nestIndex}.outcomes.${i}.text`)}
+                  field="module.outcome"
+                  context={{
+                    ...courseContext,
+                    moduleName,
+                    existingObjectives: currentObjectives.map((o) => o.text),
+                  }}
                   placeholder="e.g. Student can calculate the equilibrium price on a graph"
                   className="flex-1"
+                  onAccept={(val) =>
+                    setValue(`modules.${nestIndex}.outcomes.${i}.text`, val, {
+                      shouldValidate: true,
+                    })
+                  }
                 />
                 <button
                   type="button"
@@ -130,7 +168,9 @@ export default function ModuleItem({ nestIndex, control, register, errors, onRem
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => appendOutcome({ id: crypto.randomUUID(), text: '', objectiveIds: [] })}
+              onClick={() =>
+                appendOutcome({ id: crypto.randomUUID(), text: '', objectiveIds: [] })
+              }
             >
               + Add outcome
             </Button>

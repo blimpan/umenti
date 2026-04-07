@@ -12,12 +12,17 @@ type Props = {
 }
 
 export default function StepStructure({ form, onNext, onBack }: Props) {
-  const { control, register, formState: { errors } } = form
+  const { control, register, formState: { errors }, watch, setValue } = form
 
   const { fields: modules, append, remove } = useFieldArray({
     control,
     name: 'modules',
   })
+
+  const name = watch('name')
+  const subject = watch('subject')
+  const targetAudience = watch('targetAudience')
+  const allModules = watch('modules')
 
   function handleAddModule() {
     append({
@@ -47,6 +52,9 @@ export default function StepStructure({ form, onNext, onBack }: Props) {
             register={register}
             errors={errors}
             onRemove={() => remove(i)}
+            setValue={setValue}
+            courseContext={{ name, subject, targetAudience }}
+            existingModuleNames={allModules.map((m) => m.name).filter((_, idx) => idx !== i)}
           />
         ))}
       </div>

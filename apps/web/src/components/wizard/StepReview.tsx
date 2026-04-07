@@ -8,9 +8,10 @@ type Props = {
   form: UseFormReturn<CourseWizardInput>
   onBack: () => void
   onSubmit: () => void
+  isSubmitting: boolean
 }
 
-export default function StepReview({ form, onBack, onSubmit }: Props) {
+export default function StepReview({ form, onBack, onSubmit, isSubmitting }: Props) {
   const { getValues } = form
   const data = getValues()
 
@@ -49,8 +50,19 @@ export default function StepReview({ form, onBack, onSubmit }: Props) {
       </section>
 
       <div className="flex justify-between">
-        <Button variant="outline" onClick={onBack}>Back</Button>
-        <Button onClick={onSubmit}>Generate course</Button>
+        <Button variant="outline" onClick={onBack} disabled={isSubmitting}>
+          Back
+        </Button>
+        <Button
+          onClick={onSubmit}
+          disabled={isSubmitting}
+          className={isSubmitting
+            ? 'disabled:opacity-100 bg-primary/10 text-primary border border-primary/30 hover:bg-primary/10 border-pulse'
+            : ''
+          }
+        >
+          Generate course
+        </Button>
       </div>
     </div>
   )

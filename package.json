@@ -3,8 +3,12 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev:tmux": "./dev.sh",
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
     "lint": "pnpm --recursive lint",
     "typecheck": "pnpm --recursive typecheck"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.1.3"
   }
 }

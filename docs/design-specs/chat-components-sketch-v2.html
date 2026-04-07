@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Metis — Reduced Color Sketch (v2)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:         #f3f4f6;
+      --white:      #ffffff;
+      --gray-50:    #f9fafb;
+      --gray-100:   #f3f4f6;
+      --gray-200:   #e5e7eb;
+      --gray-300:   #d1d5db;
+      --gray-400:   #9ca3af;
+      --gray-500:   #6b7280;
+      --gray-700:   #374151;
+      --gray-800:   #1f2937;
+      --gray-900:   #111827;
+      --teal:       #0d9488;
+      --teal-dark:  #0f766e;
+      --green:      #16a34a;
+      --yellow:     #ca8a04;
+      --radius:     10px;
+      --shadow-sm:  0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md:  0 4px 12px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--gray-900);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ── Page chrome ── */
+    .page-header {
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 40px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo { width: 28px; height: 28px; background: var(--teal); border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 13px; }
+    .page-header h1 { font-size: 14px; font-weight: 700; color: var(--gray-900); }
+    .page-header span { font-size: 13px; color: var(--gray-400); font-weight: 400; margin-left: 4px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 0 80px;
+    }
+
+    .col {
+      padding: 40px 32px;
+    }
+    .col-before { border-right: 1px solid var(--gray-200); background: #fafafa; }
+    .col-after  { background: var(--white); }
+
+    .col-heading {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border-radius: 5px;
+      margin-bottom: 28px;
+      display: inline-block;
+    }
+    .col-before .col-heading { background: #fee2e2; color: #b91c1c; }
+    .col-after  .col-heading { background: #dcfce7; color: #15803d; }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      border-bottom: 1px solid var(--gray-200);
+      padding-bottom: 6px;
+      margin-bottom: 16px;
+      margin-top: 32px;
+    }
+    .section-label:first-of-type { margin-top: 0; }
+
+    .feed { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ─────────────────────────────────────────
+       SHARED: AI message (unchanged in both)
+    ───────────────────────────────────────── */
+    .msg-ai { display: flex; gap: 10px; max-width: 100%; }
+    .avatar {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--teal); color: #fff;
+      font-size: 10px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .bubble-ai {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 0 var(--radius) var(--radius) var(--radius);
+      padding: 11px 15px;
+      box-shadow: var(--shadow-sm);
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--gray-800);
+    }
+
+    /* ─────────────────────────────────────────
+       STUDENT MESSAGE
+    ───────────────────────────────────────── */
+    .msg-student { display: flex; justify-content: flex-end; }
+
+    /* BEFORE */
+    .bubble-student-before {
+      background: #ccfbf1; /* teal-100 */
+      color: #134e4a;
+      font-weight: 500;
+      border-radius: var(--radius) 0 var(--radius) var(--radius);
+      padding: 11px 15px;
+      max-width: 72%;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    /* AFTER */
+    .bubble-student-after {
+      background: var(--gray-100);
+      color: var(--gray-800);
+      border-radius: var(--radius) 0 var(--radius) var(--radius);
+      padding: 11px 15px;
+      max-width: 72%;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    /* ─────────────────────────────────────────
+       THEORY BLOCK
+    ───────────────────────────────────────── */
+
+    /* BEFORE */
+    .theory-before {
+      background: #f0fdfa; /* teal-50 */
+      border: 1px solid #99f6e4; /* teal-200 */
+      border-left: 3px solid var(--teal);
+      border-radius: var(--radius);
+      padding: 15px 17px;
+    }
+    .theory-before .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal); margin-bottom: 7px; }
+    .theory-before p   { font-size: 14px; color: #134e4a; line-height: 1.7; }
+
+    /* AFTER */
+    .theory-after {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-left: 2px solid var(--gray-300);
+      border-radius: var(--radius);
+      padding: 15px 17px;
+    }
+    .theory-after .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-400); margin-bottom: 7px; }
+    .theory-after p    { font-size: 14px; color: var(--gray-700); line-height: 1.7; }
+
+    /* ─────────────────────────────────────────
+       SYSTEM MESSAGE (shared, unchanged)
+    ───────────────────────────────────────── */
+    .system-msg { text-align: center; font-size: 11px; letter-spacing: 0.04em; color: var(--gray-400); padding: 3px 0; }
+
+    /* ─────────────────────────────────────────
+       MASTERY PILL
+    ───────────────────────────────────────── */
+
+    /* BEFORE */
+    .mastery-before {
+      display: flex; justify-content: center;
+    }
+    .mastery-before-inner {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f0fdfa; border: 1px solid #99f6e4;
+      border-radius: 100px; padding: 6px 14px;
+      font-size: 12px; font-weight: 700; color: #0f766e;
+    }
+    .mastery-dot-before {
+      width: 15px; height: 15px; border-radius: 50%;
+      background: var(--teal); color: #fff;
+      font-size: 8px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* AFTER — just quiet centered text like a system message */
+    .mastery-after {
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--gray-400);
+      padding: 3px 0;
+    }
+
+    /* ─────────────────────────────────────────
+       EXERCISE CARD — FREE TEXT
+    ───────────────────────────────────────── */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 11px 15px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .ex-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; background: var(--gray-100);
+      border: 1px solid var(--gray-200); border-radius: 4px;
+      padding: 2px 7px; color: var(--gray-400);
+    }
+    .card-body { padding: 15px; }
+    .question { font-size: 14px; font-weight: 600; color: var(--gray-900); line-height: 1.5; margin-bottom: 12px; }
+    .answer-area {
+      width: 100%; font-family: inherit; font-size: 13px;
+      padding: 9px 11px; border: 1px solid var(--gray-200);
+      border-radius: 6px; background: var(--gray-50);
+      color: var(--gray-500); resize: none; line-height: 1.55;
+      display: block;
+    }
+    .card-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 11px; }
+    .btn-primary {
+      background: var(--teal); color: #fff;
+      border: none; border-radius: 6px;
+      padding: 7px 18px; font-family: inherit;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .btn-hint {
+      background: none; border: none; font-family: inherit;
+      font-size: 12px; color: var(--gray-400); cursor: pointer;
+    }
+
+    /* Active — before */
+    .card-active-before { border: 2px solid var(--gray-200); box-shadow: var(--shadow-md); }
+    /* Active — after (same, just confirming no change here) */
+    .card-active-after  { border: 1px solid var(--gray-200); box-shadow: var(--shadow-md); }
+
+    /* Correct */
+    .card-correct { border: 1px solid var(--gray-200); border-left: 4px solid var(--green); }
+    /* Incorrect */
+    .card-incorrect { border: 1px solid var(--gray-200); border-left: 4px solid #eab308; /* yellow-500 */ }
+
+    /* Result pill — BEFORE: colored */
+    .pill-before-correct   { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 100px; background: #dcfce7; color: var(--green); margin-top: 10px; }
+    .pill-before-incorrect { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 100px; background: #fef9c3; color: #a16207; margin-top: 10px; }
+
+    /* Result pill — AFTER: neutral gray */
+    .pill-after { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 100px; background: var(--gray-100); color: var(--gray-500); margin-top: 10px; }
+
+    /* ─────────────────────────────────────────
+       EXERCISE CARD — MULTIPLE CHOICE
+    ───────────────────────────────────────── */
+    .mc-options { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+    .mc-opt {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 13px; border: 1px solid var(--gray-200);
+      border-radius: 6px; min-height: 40px;
+      font-size: 13px; color: var(--gray-800);
+      cursor: pointer;
+    }
+    .radio { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--gray-300); flex-shrink: 0; }
+
+    /* BEFORE selected: teal-50 bg */
+    .mc-opt.selected-before { border-color: var(--teal); background: #f0fdfa; color: #134e4a; }
+    .mc-opt.selected-before .radio { border-color: var(--teal); background: var(--teal); }
+
+    /* AFTER selected: gray border only, filled gray radio */
+    .mc-opt.selected-after { border-color: var(--gray-800); color: var(--gray-900); }
+    .mc-opt.selected-after .radio { border-color: var(--gray-800); background: var(--gray-800); }
+
+    .mc-opt.unselected { opacity: 0.38; }
+    .mc-opt.result-correct { border-color: #86efac; }
+    .mc-opt.result-correct .radio { border-color: var(--green); background: var(--green); }
+    .mc-opt.result-wrong   { border-color: #fde047; }
+    .mc-opt.result-wrong   .radio { border-color: #eab308; background: #eab308; }
+
+    /* ─────────────────────────────────────────
+       ANNOTATIONS
+    ───────────────────────────────────────── */
+    .change-note {
+      font-size: 11px;
+      color: #15803d;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 5px;
+      padding: 4px 9px;
+      margin-top: 6px;
+      display: inline-block;
+    }
+
+    .unchanged-note {
+      font-size: 11px;
+      color: var(--gray-400);
+      margin-top: 4px;
+      display: inline-block;
+    }
+
+    hr.divider {
+      border: none;
+      border-top: 1px solid var(--gray-200);
+      margin: 28px 0 0;
+    }
+  </style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="logo">M</div>
+  <h1>Metis <span>— Color reduction sketch · v2</span></h1>
+</header>
+
+<div class="layout">
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- BEFORE column                          -->
+  <!-- ══════════════════════════════════════ -->
+  <div class="col col-before">
+    <span class="col-heading">Before — too much color</span>
+
+    <!-- AI message -->
+    <div class="section-label">AI message (unchanged)</div>
+    <div class="feed">
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">What do you think happens during the S phase of the cell cycle?</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Student message -->
+    <div class="section-label">Student message</div>
+    <div class="feed">
+      <div class="msg-student">
+        <div class="bubble-student-before">I think DNA copying happens in the S phase.</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Theory block -->
+    <div class="section-label">Theory block</div>
+    <div class="feed">
+      <div class="theory-before">
+        <div class="tag">Theory</div>
+        <p>The S phase (synthesis phase) is when the cell replicates its DNA, producing two identical copies of each chromosome in preparation for cell division.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- System + mastery -->
+    <div class="section-label">System events</div>
+    <div class="feed">
+      <div class="system-msg">Moving to the next concept</div>
+      <div class="mastery-before">
+        <div class="mastery-before-inner">
+          <div class="mastery-dot-before">✓</div>
+          Concept mastered · 94
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Exercise card: correct -->
+    <div class="section-label">Exercise — correct result</div>
+    <div class="card card-correct">
+      <div class="card-header"><span class="ex-tag">Free recall</span></div>
+      <div class="card-body">
+        <div class="question">Explain what happens during the S phase.</div>
+        <div class="answer-area" style="height:56px;">DNA replication occurs — chromosomes are duplicated so each daughter cell gets a full copy.</div>
+        <div class="pill-before-correct">✓ Correct!</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Exercise card: incorrect -->
+    <div class="section-label">Exercise — incorrect result</div>
+    <div class="card card-incorrect">
+      <div class="card-header"><span class="ex-tag">Free recall</span></div>
+      <div class="card-body">
+        <div class="question">Explain what happens during the S phase.</div>
+        <div class="answer-area" style="height:56px;">The cell just grows bigger during S phase.</div>
+        <div class="pill-before-incorrect">↗ Incorrect!</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- MC: selection -->
+    <div class="section-label">Multiple choice — selected (before submit)</div>
+    <div class="card card-active-before">
+      <div class="card-header"><span class="ex-tag">Multiple choice</span></div>
+      <div class="card-body">
+        <div class="question">Which phase follows the S phase?</div>
+        <div class="mc-options">
+          <div class="mc-opt"><div class="radio"></div>G1 phase</div>
+          <div class="mc-opt selected-before"><div class="radio"></div>G2 phase</div>
+          <div class="mc-opt"><div class="radio"></div>M phase</div>
+          <div class="mc-opt"><div class="radio"></div>G0 phase</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- AFTER column                           -->
+  <!-- ══════════════════════════════════════ -->
+  <div class="col col-after">
+    <span class="col-heading">After — monochromatic hierarchy</span>
+
+    <!-- AI message -->
+    <div class="section-label">AI message (unchanged)</div>
+    <div class="feed">
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">What do you think happens during the S phase of the cell cycle?</div>
+      </div>
+    </div>
+    <span class="unchanged-note">No change — white card + gray border already correct</span>
+
+    <hr class="divider" />
+
+    <!-- Student message -->
+    <div class="section-label">Student message</div>
+    <div class="feed">
+      <div class="msg-student">
+        <div class="bubble-student-after">I think DNA copying happens in the S phase.</div>
+      </div>
+    </div>
+    <span class="change-note">teal-100 → gray-100 · Alignment distinguishes it; no color needed</span>
+
+    <hr class="divider" />
+
+    <!-- Theory block -->
+    <div class="section-label">Theory block</div>
+    <div class="feed">
+      <div class="theory-after">
+        <div class="tag">Theory</div>
+        <p>The S phase (synthesis phase) is when the cell replicates its DNA, producing two identical copies of each chromosome in preparation for cell division.</p>
+      </div>
+    </div>
+    <span class="change-note">teal surface → gray-50 · teal border → gray-300 · Label gray-400</span>
+
+    <hr class="divider" />
+
+    <!-- System + mastery -->
+    <div class="section-label">System events</div>
+    <div class="feed">
+      <div class="system-msg">Moving to the next concept</div>
+      <div class="mastery-after">✓ Concept mastered · 94</div>
+    </div>
+    <span class="change-note">Teal pill → quiet centered text · Same weight as system messages</span>
+
+    <hr class="divider" />
+
+    <!-- Exercise card: correct -->
+    <div class="section-label">Exercise — correct result</div>
+    <div class="card card-correct">
+      <div class="card-header"><span class="ex-tag">Free recall</span></div>
+      <div class="card-body">
+        <div class="question">Explain what happens during the S phase.</div>
+        <div class="answer-area" style="height:56px;">DNA replication occurs — chromosomes are duplicated so each daughter cell gets a full copy.</div>
+        <div class="pill-after">✓ Correct</div>
+      </div>
+    </div>
+    <span class="change-note">Green pill → gray pill · Green left-border stripe carries the signal</span>
+
+    <hr class="divider" />
+
+    <!-- Exercise card: incorrect -->
+    <div class="section-label">Exercise — incorrect result</div>
+    <div class="card card-incorrect">
+      <div class="card-header"><span class="ex-tag">Free recall</span></div>
+      <div class="card-body">
+        <div class="question">Explain what happens during the S phase.</div>
+        <div class="answer-area" style="height:56px;">The cell just grows bigger during S phase.</div>
+        <div class="pill-after">↗ Keep going</div>
+      </div>
+    </div>
+    <span class="change-note">Yellow pill → gray pill · Yellow left-border stripe carries the signal</span>
+
+    <hr class="divider" />
+
+    <!-- MC: selection -->
+    <div class="section-label">Multiple choice — selected (before submit)</div>
+    <div class="card card-active-after">
+      <div class="card-header"><span class="ex-tag">Multiple choice</span></div>
+      <div class="card-body">
+        <div class="question">Which phase follows the S phase?</div>
+        <div class="mc-options">
+          <div class="mc-opt"><div class="radio"></div>G1 phase</div>
+          <div class="mc-opt selected-after"><div class="radio"></div>G2 phase</div>
+          <div class="mc-opt"><div class="radio"></div>M phase</div>
+          <div class="mc-opt"><div class="radio"></div>G0 phase</div>
+        </div>
+      </div>
+    </div>
+    <span class="change-note">teal-50 bg → white · Gray border + filled radio signals selection</span>
+
+  </div>
+</div>
+
+</body>
+</html>

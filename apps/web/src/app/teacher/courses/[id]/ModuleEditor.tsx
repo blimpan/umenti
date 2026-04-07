@@ -2,21 +2,17 @@
 
 import { useState } from 'react'
 import { CourseModule, CourseExercise } from '@metis/types'
-import { createClient } from '@/lib/supabase/client'
+import { apiFetch } from '@/lib/api'
 import InlineEditField from './InlineEditField'
+import { VizChip } from './VizPreviewModal'
 import { useRouter } from 'next/navigation'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 
 async function patch(path: string, body: Record<string, unknown>): Promise<Response> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(`${API}${path}`, {
+  const res = await apiFetch(`${API}${path}`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session!.access_token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   if (!res.ok) console.error(`PATCH ${path} failed:`, res.status)
@@ -229,6 +225,20 @@ export default function ModuleEditor({ module, courseId }: Props) {
                 </div>
               ))}
 
+              {/* Visualization chips */}
+              {concept.visualizations.length > 0 && (
+                <div className="px-5 py-3 flex flex-wrap items-center gap-2 border-t bg-gray-50/50">
+                  <span className="text-xs text-gray-400 mr-1">Visualizations</span>
+                  {concept.visualizations.map((viz) => (
+                    <VizChip
+                      key={viz.id}
+                      templateId={viz.visualizationType}
+                      params={viz.visualizationParams}
+                    />
+                  ))}
+                </div>
+              )}
+
               {/* Exercises for this concept */}
               {(exercisesByConcept.get(concept.id) ?? []).map((ex, index) => (
                 <div key={ex.id} className="px-5 py-4 group">
@@ -263,58 +273,110 @@ export default function ModuleEditor({ module, courseId }: Props) {
 }
 
 function ExerciseCard({ exercise }: { exercise: CourseExercise }) {
+  const [options, setOptions] = useState<string[]>(exercise.options ?? [])
+
+  function saveField(field: string, value: string | string[]) {
+    patch(`/api/content/exercises/${exercise.id}`, { [field]: value })
+  }
+
+  function saveOption(index: number, value: string) {
+    const updated = options.map((o, i) => (i === index ? value : o))
+    setOptions(updated)
+    saveField('options', updated)
+  }
+
   return (
-    <div className="px-5 py-4 group">
+    <div className="group">
+      {/* Question */}
       <div className="flex items-start justify-between gap-4 mb-3">
         <InlineEditField
           value={exercise.question}
-          onSave={(v) => console.log('TODO: save exercise question', exercise.id, v)}
+          onSave={(v) => saveField('question', v)}
           multiline
+          markdown
           className="text-sm font-medium text-gray-900 flex-1"
           placeholder="Exercise question..."
         />
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">
-            {exercise.type === 'MULTIPLE_CHOICE' ? 'MC' : 'Free text'}
-          </span>
-          <button className="text-xs text-gray-400 hover:text-primary transition-colors opacity-0 group-hover:opacity-100">
-            ✦ Suggest revision
-          </button>
-        </div>
+        <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500 shrink-0 mt-0.5">
+          {exercise.type === 'MULTIPLE_CHOICE' ? 'MC' : exercise.type === 'INTERACTIVE' ? 'Interactive' : 'Free text'}
+        </span>
       </div>
 
-      {exercise.type === 'MULTIPLE_CHOICE' && exercise.options && (
-        <ol className="space-y-1">
-          {exercise.options.map((opt, i) => (
+      {/* MC options */}
+      {exercise.type === 'MULTIPLE_CHOICE' && (
+        <ol className="space-y-1 mb-2">
+          {options.map((opt, i) => (
             <li
               key={i}
-              className={`px-3 py-1.5 rounded text-sm ${
+              className={`flex items-start gap-2 px-3 py-1.5 rounded text-sm ${
                 i === exercise.correctIndex
-                  ? 'bg-green-50 text-green-800 font-medium'
+                  ? 'bg-green-50 text-green-800'
                   : 'bg-gray-50 text-gray-700'
               }`}
             >
-              {String.fromCharCode(65 + i)}. {opt}
+              <span className="shrink-0 font-medium mt-0.5">{String.fromCharCode(65 + i)}.</span>
+              <InlineEditField
+                value={opt}
+                onSave={(v) => saveOption(i, v)}
+                multiline
+                markdown
+                className="flex-1"
+                placeholder={`Option ${String.fromCharCode(65 + i)}...`}
+              />
             </li>
           ))}
         </ol>
       )}
 
-      {exercise.type === 'MULTIPLE_CHOICE' && exercise.explanation && (
-        <p className="text-xs text-gray-400 mt-2 italic">{exercise.explanation}</p>
-      )}
-
-      {exercise.type === 'FREE_TEXT' && exercise.sampleAnswer && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-gray-400">Sample answer</p>
-          <p className="text-sm text-gray-700">{exercise.sampleAnswer}</p>
+      {/* MC explanation */}
+      {exercise.type === 'MULTIPLE_CHOICE' && (
+        <div className="text-xs text-gray-400 italic">
+          <InlineEditField
+            value={exercise.explanation ?? ''}
+            onSave={(v) => saveField('explanation', v)}
+            multiline
+            markdown
+            placeholder="Add explanation..."
+            className="w-full"
+          />
         </div>
       )}
 
-      {exercise.type === 'FREE_TEXT' && exercise.rubric && (
-        <div className="space-y-1 mt-2">
-          <p className="text-xs font-medium text-gray-400">Rubric</p>
-          <p className="text-sm text-gray-700">{exercise.rubric}</p>
+      {/* Interactive viz chip */}
+      {exercise.type === 'INTERACTIVE' && exercise.visualizationType && (
+        <div className="mt-2">
+          <VizChip
+            templateId={exercise.visualizationType}
+            params={exercise.visualizationParams ?? {}}
+          />
+        </div>
+      )}
+
+      {/* Free text sample answer + rubric */}
+      {exercise.type === 'FREE_TEXT' && (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-400">Sample answer</p>
+            <InlineEditField
+              value={exercise.sampleAnswer ?? ''}
+              onSave={(v) => saveField('sampleAnswer', v)}
+              multiline
+              markdown
+              placeholder="Add sample answer..."
+              className="text-sm text-gray-700 w-full"
+            />
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-400">Rubric</p>
+            <InlineEditField
+              value={exercise.rubric ?? ''}
+              onSave={(v) => saveField('rubric', v)}
+              multiline
+              markdown
+              placeholder="Add rubric..."
+              className="text-sm text-gray-700 w-full"
+            />
+          </div>
         </div>
       )}
     </div>

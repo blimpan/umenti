@@ -22,3 +22,7 @@ apps/api/logs/
 # Misc
 .DS_Store
 .worktrees/
+
+# Tool artifacts
+.playwright-mcp/
+.superpowers/

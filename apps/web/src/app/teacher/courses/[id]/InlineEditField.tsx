@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import MathMarkdown from '@/components/MathMarkdown'
 
 interface InlineEditFieldProps {
   value: string
@@ -84,7 +84,7 @@ export default function InlineEditField({
         className={`md-content cursor-text min-h-[1.5rem] ${className}`}
       >
         {committed
-          ? <ReactMarkdown>{committed}</ReactMarkdown>
+          ? <MathMarkdown>{committed}</MathMarkdown>
           : <span className="text-gray-400">{placeholder}</span>
         }
       </div>

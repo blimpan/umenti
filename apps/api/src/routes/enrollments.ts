@@ -1,9 +1,9 @@
 import { Router } from 'express'
-import { PrismaClient } from '@prisma/client'
+import prisma from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
+import { logger } from '../lib/logger'
 
 const router = Router()
-const prisma = new PrismaClient()
 
 // PATCH /api/enrollments/:id — student accepts or rejects a course invitation
 router.patch('/:id', requireAuth, async (req, res) => {
@@ -57,8 +57,35 @@ router.patch('/:id', requireAuth, async (req, res) => {
 
     res.status(204).send()
       } catch (err) {
-    console.error('[PATCH /api/enrollments/:id]', err)
+    logger.error({ err }, '[PATCH /api/enrollments/:id]')
     res.status(500).json({ error: 'Failed to update enrollment' })
+  }
+})
+
+// DELETE /api/enrollments/:id — teacher withdraws a pending invitation
+router.delete('/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id as string)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return }
+
+  try {
+    const enrollment = await prisma.enrollment.findUnique({
+      where: { id },
+      select: { status: true, course: { select: { teacherId: true } } },
+    })
+
+    if (!enrollment || enrollment.status !== 'PENDING') {
+      res.status(404).json({ error: 'Enrollment not found or not pending' }); return
+    }
+
+    if (enrollment.course.teacherId !== req.user!.id) {
+      res.status(403).json({ error: 'Forbidden' }); return
+    }
+
+    await prisma.enrollment.delete({ where: { id } })
+    res.status(204).send()
+  } catch (err) {
+    logger.error({ err }, '[DELETE /api/enrollments/:id]')
+    res.status(500).json({ error: 'Failed to withdraw enrollment' })
   }
 })
 

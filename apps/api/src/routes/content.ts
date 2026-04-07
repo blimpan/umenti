@@ -1,9 +1,10 @@
 import { Router } from 'express'
-import { PrismaClient } from '@prisma/client'
+import prisma from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
+import { logger } from '../lib/logger'
+import { invalidateCachedModules } from '../lib/cache'
 
 const router = Router()
-const prisma = new PrismaClient()
 
 // PATCH /api/content/concepts/:id
 router.patch('/concepts/:id', requireAuth, async (req, res) => {
@@ -20,10 +21,13 @@ router.patch('/concepts/:id', requireAuth, async (req, res) => {
       where: { id, course: { teacherId: req.user!.id } },
       data: { name: name.trim() },
     })
+    prisma.moduleConcept.findMany({ where: { conceptId: id }, select: { moduleId: true } })
+      .then(links => invalidateCachedModules(...links.map(l => l.moduleId)))
+      .catch(err => logger.error({ err }, 'cache invalidation failed'))
     res.status(204).send()
   } catch (err: any) {
     if (err?.code === 'P2025') { res.status(404).json({ error: 'Not found' }); return }
-    console.error('[PATCH /api/content/concepts/:id]', err)
+    logger.error({ err }, '[PATCH /api/content/concepts/:id]')
     res.status(500).json({ error: 'Failed to update concept' })
   }
 })
@@ -46,10 +50,15 @@ router.patch('/theory-blocks/:id', requireAuth, async (req, res) => {
         ...(pendingRevision !== undefined && { pendingRevision }),
       },
     })
+    prisma.moduleConcept.findMany({
+      where: { concept: { theoryBlocks: { some: { id } } } },
+      select: { moduleId: true },
+    }).then(links => invalidateCachedModules(...links.map(l => l.moduleId)))
+      .catch(err => logger.error({ err }, 'cache invalidation failed'))
     res.status(204).send()
   } catch (err: any) {
     if (err?.code === 'P2025') { res.status(404).json({ error: 'Not found' }); return }
-    console.error('[PATCH /api/content/theory-blocks/:id]', err)
+    logger.error({ err }, '[PATCH /api/content/theory-blocks/:id]')
     res.status(500).json({ error: 'Failed to update theory block' })
   }
 })
@@ -65,14 +74,16 @@ router.patch('/objectives/:id', requireAuth, async (req, res) => {
   }
 
   try {
-    await prisma.learningObjective.update({
+    const updated = await prisma.learningObjective.update({
       where: { id, courseModule: { course: { teacherId: req.user!.id } } },
       data: { text: text.trim() },
+      select: { courseModuleId: true },
     })
+    invalidateCachedModules(updated.courseModuleId).catch(err => logger.error({ err }, 'cache invalidation failed'))
     res.status(204).send()
   } catch (err: any) {
     if (err?.code === 'P2025') { res.status(404).json({ error: 'Not found' }); return }
-    console.error('[PATCH /api/content/objectives/:id]', err)
+    logger.error({ err }, '[PATCH /api/content/objectives/:id]')
     res.status(500).json({ error: 'Failed to update objective' })
   }
 })
@@ -88,14 +99,16 @@ router.patch('/outcomes/:id', requireAuth, async (req, res) => {
   }
 
   try {
-    await prisma.learningOutcome.update({
+    const updated = await prisma.learningOutcome.update({
       where: { id, courseModule: { course: { teacherId: req.user!.id } } },
       data: { text: text.trim() },
+      select: { courseModuleId: true },
     })
+    invalidateCachedModules(updated.courseModuleId).catch(err => logger.error({ err }, 'cache invalidation failed'))
     res.status(204).send()
   } catch (err: any) {
     if (err?.code === 'P2025') { res.status(404).json({ error: 'Not found' }); return }
-    console.error('[PATCH /api/content/outcomes/:id]', err)
+    logger.error({ err }, '[PATCH /api/content/outcomes/:id]')
     res.status(500).json({ error: 'Failed to update outcome' })
   }
 })
@@ -124,11 +137,46 @@ router.patch('/modules/:id', requireAuth, async (req, res) => {
         ...(reviewStatus !== undefined && { reviewStatus }),
       },
     })
+    invalidateCachedModules(id).catch(err => logger.error({ err }, 'cache invalidation failed'))
     res.status(204).send()
   } catch (err: any) {
     if (err?.code === 'P2025') { res.status(404).json({ error: 'Not found' }); return }
-    console.error('[PATCH /api/content/modules/:id]', err)
+    logger.error({ err }, '[PATCH /api/content/modules/:id]')
     res.status(500).json({ error: 'Failed to update module' })
+  }
+})
+
+// PATCH /api/content/exercises/:id
+router.patch('/exercises/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id as string)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return }
+
+  const { question, options, explanation, sampleAnswer, rubric } = req.body as {
+    question?:     string
+    options?:      string[]
+    explanation?:  string
+    sampleAnswer?: string
+    rubric?:       string
+  }
+
+  try {
+    const updated = await prisma.exercise.update({
+      where: { id, courseModule: { course: { teacherId: req.user!.id } } },
+      data: {
+        ...(question     !== undefined && { question:     question.trim() }),
+        ...(options      !== undefined && { options }),
+        ...(explanation  !== undefined && { explanation:  explanation.trim() }),
+        ...(sampleAnswer !== undefined && { sampleAnswer: sampleAnswer.trim() }),
+        ...(rubric       !== undefined && { rubric:       rubric.trim() }),
+      },
+      select: { courseModuleId: true },
+    })
+    invalidateCachedModules(updated.courseModuleId).catch(err => logger.error({ err }, 'cache invalidation failed'))
+    res.status(204).send()
+  } catch (err: any) {
+    if (err?.code === 'P2025') { res.status(404).json({ error: 'Not found' }); return }
+    logger.error({ err }, '[PATCH /api/content/exercises/:id]')
+    res.status(500).json({ error: 'Failed to update exercise' })
   }
 })
 

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Input Design Proposals</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --teal-600: #0d9488;
+      --teal-700: #0f766e;
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+      --white:    #ffffff;
+      --radius:   0.625rem;
+    }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: #f5f5f4;
+      color: var(--gray-900);
+      min-height: 100vh;
+      padding: 48px 32px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: var(--gray-900);
+    }
+    .subtitle {
+      font-size: 0.875rem;
+      color: var(--gray-500);
+      margin-bottom: 48px;
+    }
+
+    .proposals {
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+    }
+
+    .proposal {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .proposal-label {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--gray-100);
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .proposal-label h2 {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+    .proposal-label p {
+      font-size: 0.75rem;
+      color: var(--gray-400);
+    }
+
+    /* ─── simulated chat area ─────────────────────────── */
+    .chat-area {
+      padding: 24px 24px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ai-bubble {
+      display: flex;
+      gap: 10px;
+      max-width: 560px;
+    }
+    .ai-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--teal-600);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .ai-avatar span {
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .ai-text {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      border-radius: 18px 18px 18px 4px;
+      padding: 12px 16px;
+      font-size: 0.875rem;
+      color: var(--gray-700);
+      line-height: 1.6;
+    }
+
+    .student-bubble {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .student-text {
+      background: var(--gray-900);
+      color: white;
+      border-radius: 18px 18px 4px 18px;
+      padding: 10px 16px;
+      font-size: 0.875rem;
+      max-width: 360px;
+      line-height: 1.5;
+    }
+
+    /* ─── input bar wrapper shared ─────────────────── */
+    .input-bar {
+      padding: 16px 24px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       PROPOSAL A — "Focused Composer"
+       Taller textarea, slightly narrower, Send inside
+       ══════════════════════════════════════════════════ */
+
+    .proposal-a .input-bar {
+      background: var(--white);
+    }
+
+    .proposal-a .composer {
+      max-width: 680px;
+      margin: 0 auto;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 14px;
+      background: var(--white);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      transition: border-color 0.15s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .proposal-a .composer:focus-within {
+      border-color: var(--teal-600);
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.08);
+    }
+
+    .proposal-a .composer textarea {
+      width: 100%;
+      resize: none;
+      border: none;
+      outline: none;
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.875rem;
+      color: var(--gray-900);
+      padding: 14px 16px 8px;
+      min-height: 72px;
+      background: transparent;
+      line-height: 1.6;
+    }
+    .proposal-a .composer textarea::placeholder { color: var(--gray-400); }
+
+    .proposal-a .composer-footer {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 8px 12px 10px;
+      border-top: 1px solid var(--gray-100);
+    }
+
+    .proposal-a .send-btn {
+      background: var(--teal-600);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      padding: 6px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .proposal-a .send-btn:hover { background: var(--teal-700); }
+
+    .proposal-a .hint {
+      font-size: 0.7rem;
+      color: var(--gray-400);
+      margin-right: auto;
+    }
+    .proposal-a .hint kbd {
+      display: inline-block;
+      font-family: monospace;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      padding: 0 5px;
+      font-size: 0.7rem;
+    }
+
+
+    /* ══════════════════════════════════════════════════
+       PROPOSAL B — "Pill Input"
+       Rounded pill container, narrower, taller, icon send
+       ══════════════════════════════════════════════════ */
+
+    .proposal-b .input-bar {
+      background: var(--gray-50);
+      border-top: 1px solid var(--gray-100);
+    }
+
+    .proposal-b .pill-wrap {
+      max-width: 620px;
+      margin: 0 auto;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .proposal-b .pill {
+      flex: 1;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 20px;
+      background: var(--white);
+      padding: 12px 18px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .proposal-b .pill:focus-within {
+      border-color: var(--teal-600);
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.07);
+    }
+    .proposal-b .pill textarea {
+      width: 100%;
+      resize: none;
+      border: none;
+      outline: none;
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.875rem;
+      color: var(--gray-900);
+      background: transparent;
+      line-height: 1.6;
+      min-height: 52px;
+    }
+    .proposal-b .pill textarea::placeholder { color: var(--gray-400); }
+
+    .proposal-b .send-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--teal-600);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s;
+      margin-bottom: 2px;
+    }
+    .proposal-b .send-circle:hover { background: var(--teal-700); }
+    .proposal-b .send-circle svg { display: block; }
+
+
+    /* ══════════════════════════════════════════════════
+       PROPOSAL C — "Elevated Panel"
+       Card with shadow, narrower, taller, two-row layout
+       with char hint at bottom left
+       ══════════════════════════════════════════════════ */
+
+    .proposal-c .input-bar {
+      background: var(--white);
+      border-top: 1px solid var(--gray-100);
+      padding: 20px 32px;
+    }
+
+    .proposal-c .panel {
+      max-width: 640px;
+      margin: 0 auto;
+      border-radius: 16px;
+      border: 1px solid var(--gray-200);
+      background: var(--white);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+      overflow: hidden;
+    }
+
+    .proposal-c .panel textarea {
+      width: 100%;
+      resize: none;
+      border: none;
+      outline: none;
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.875rem;
+      color: var(--gray-900);
+      padding: 16px 18px 10px;
+      min-height: 80px;
+      background: transparent;
+      line-height: 1.6;
+      display: block;
+    }
+    .proposal-c .panel textarea::placeholder { color: var(--gray-400); }
+
+    .proposal-c .panel-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px 12px;
+      border-top: 1px solid var(--gray-100);
+      background: var(--gray-50);
+    }
+
+    .proposal-c .char-hint {
+      font-size: 0.7rem;
+      color: var(--gray-400);
+    }
+
+    .proposal-c .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .proposal-c .send-btn {
+      background: var(--gray-900);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      padding: 7px 18px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .proposal-c .send-btn:hover { background: var(--gray-700); }
+
+    .proposal-c .shortcut {
+      font-size: 0.7rem;
+      color: var(--gray-400);
+    }
+    .proposal-c .shortcut kbd {
+      display: inline-block;
+      font-family: monospace;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      padding: 0 5px;
+      font-size: 0.7rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Chat Input — Design Proposals</h1>
+  <p class="subtitle">All 3 proposals are slightly taller and narrower than the current full-width single-line input. Click into a textarea to see focus state.</p>
+
+  <div class="proposals">
+
+    <!-- ═══════════════════════════════════════════
+         PROPOSAL A — Focused Composer
+         ═══════════════════════════════════════════ -->
+    <div class="proposal proposal-a">
+      <div class="proposal-label">
+        <h2>A — Focused Composer</h2>
+        <p>Bordered card with footer row. Send button anchored bottom-right inside the card. Keyboard hint on the left.</p>
+      </div>
+
+      <div class="chat-area">
+        <div class="ai-bubble">
+          <div class="ai-avatar"><span>M</span></div>
+          <div class="ai-text">What might be a graphical way to represent the direction and rate of fastest increase at any given point?</div>
+        </div>
+        <div class="student-bubble">
+          <div class="student-text">What is a gradient?</div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <div class="composer">
+          <textarea placeholder="Ask a question…" rows="3"></textarea>
+          <div class="composer-footer">
+            <span class="hint"><kbd>⇧↵</kbd> for new line</span>
+            <button class="send-btn">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════
+         PROPOSAL B — Pill Input
+         ═══════════════════════════════════════════ -->
+    <div class="proposal proposal-b">
+      <div class="proposal-label">
+        <h2>B — Pill Input</h2>
+        <p>Rounded pill textarea with a circular send button. Subtle background wash in the bar area.</p>
+      </div>
+
+      <div class="chat-area">
+        <div class="ai-bubble">
+          <div class="ai-avatar"><span>M</span></div>
+          <div class="ai-text">What might be a graphical way to represent the direction and rate of fastest increase at any given point?</div>
+        </div>
+        <div class="student-bubble">
+          <div class="student-text">What is a gradient?</div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <div class="pill-wrap">
+          <div class="pill">
+            <textarea placeholder="Ask a question…" rows="3"></textarea>
+          </div>
+          <button class="send-circle" title="Send">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M2 9h14M9 3l6 6-6 6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════
+         PROPOSAL C — Elevated Panel
+         ═══════════════════════════════════════════ -->
+    <div class="proposal proposal-c">
+      <div class="proposal-label">
+        <h2>C — Elevated Panel</h2>
+        <p>Raised card with shadow and a tinted footer. Dark Send button (neutral, doesn't compete with teal AI elements). Shortcut hint inline.</p>
+      </div>
+
+      <div class="chat-area">
+        <div class="ai-bubble">
+          <div class="ai-avatar"><span>M</span></div>
+          <div class="ai-text">What might be a graphical way to represent the direction and rate of fastest increase at any given point?</div>
+        </div>
+        <div class="student-bubble">
+          <div class="student-text">What is a gradient?</div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <div class="panel">
+          <textarea placeholder="Ask a question…" rows="3"></textarea>
+          <div class="panel-footer">
+            <span class="char-hint">Socratic mode — Metis will guide, not answer</span>
+            <div class="actions">
+              <span class="shortcut"><kbd>↵</kbd> to send</span>
+              <button class="send-btn">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

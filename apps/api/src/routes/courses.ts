@@ -1,35 +1,81 @@
 import { Router } from 'express'
-import { CourseStatus, PrismaClient, Prisma } from '@prisma/client'
+import { CourseStatus, Prisma } from '@prisma/client'
+import prisma from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { triggerGeneration } from '../services/courseGeneration'
-import { CourseWizardInput, CourseListItem, CourseDetail, ReviewStatus, CourseConcept, CourseExercise } from '@metis/types'
+import { logger, llmLogger } from '../lib/logger'
+import { CourseWizardInput, CourseListItem, CourseDetail, ReviewStatus, CourseConcept, CourseExercise, GetCourseAnalyticsResponse } from '@metis/types'
+import { computeProgress, latestSession, pickGranularity } from '../lib/analytics'
 
 const router = Router()
-const prisma = new PrismaClient()
+
+export function buildObjectivesData(
+  modules: Array<{ order: number; objectives: Array<{ text: string }> }>,
+  dbModules: Array<{ id: number; order: number }>,
+): Array<{ text: string; courseModuleId: number }> {
+  const idByOrder = new Map(dbModules.map(m => [m.order, m.id]))
+  return modules.flatMap((m) => {
+    const moduleId = idByOrder.get(m.order)
+    if (moduleId === undefined) return []
+    return m.objectives.map(o => ({ text: o.text, courseModuleId: moduleId }))
+  })
+}
+
+export function buildOutcomesData(
+  modules: Array<{ order: number; outcomes: Array<{ text: string }> }>,
+  dbModules: Array<{ id: number; order: number }>,
+): Array<{ text: string; courseModuleId: number }> {
+  const idByOrder = new Map(dbModules.map(m => [m.order, m.id]))
+  return modules.flatMap((m) => {
+    const moduleId = idByOrder.get(m.order)
+    if (moduleId === undefined) return []
+    return m.outcomes.map(o => ({ text: o.text, courseModuleId: moduleId }))
+  })
+}
 
 router.post('/', requireAuth, async (req, res) => {
   const body = req.body as CourseWizardInput
 
   try {
 
-    const courseId: number = await prisma.$transaction(async (tx) => { 
+    const courseId: number = await prisma.$transaction(async (tx) => {
+      // Phase 1 — course row
       const course = await tx.course.create({
         data: {
-          teacherId: req.user!.id, // req.user is guaranteed to be set by requireAuth middleware
-          status: 'GENERATING',
-          name: body.name,
-          subject: body.subject,
-          language: body.language,
+          teacherId:      req.user!.id,
+          status:         'GENERATING',
+          name:           body.name,
+          subject:        body.subject,
+          language:       body.language,
           targetAudience: body.targetAudience,
-          courseModules: {
-            create: body.modules.map((m, index) => ({
-              name: m.name,
-              order: index,
-              objectives: { create: m.objectives.map(o => ({ text: o.text })) },
-              outcomes:   { create: m.outcomes.map(o => ({ text: o.text })) },
-            }))
-          }
-        }
+        },
+      })
+
+      // Phase 2 — all modules in one INSERT
+      await tx.courseModule.createMany({
+        data: body.modules.map((m, index) => ({
+          courseId: course.id,
+          name:     m.name,
+          order:    index,
+        })),
+      })
+
+      // Phase 3 — fetch back DB IDs (identified by courseId + order)
+      const dbModules = await tx.courseModule.findMany({
+        where:   { courseId: course.id },
+        select:  { id: true, order: true },
+        orderBy: { order: 'asc' as const },
+      })
+
+      // Phase 4 — objectives and outcomes in two bulk INSERTs
+      const modulesWithOrder = body.modules.map((m, index) => ({ ...m, order: index }))
+
+      await tx.learningObjective.createMany({
+        data: buildObjectivesData(modulesWithOrder, dbModules),
+      })
+
+      await tx.learningOutcome.createMany({
+        data: buildOutcomesData(modulesWithOrder, dbModules),
       })
 
       return course.id
@@ -37,11 +83,11 @@ router.post('/', requireAuth, async (req, res) => {
 
     // Fire generation in the background — do NOT await this.
     // The teacher gets a response immediately; generation runs async.
-    triggerGeneration(courseId).catch(console.error)
+    triggerGeneration(courseId).catch(err => llmLogger.error({ err }, 'triggerGeneration failed'))
 
     res.status(201).json({ courseId: courseId })
   } catch (err) {
-    console.error('[POST /api/courses]', err)
+    logger.error({ err }, '[POST /api/courses]')
     res.status(500).json({ error: 'Failed to create course' })
   }
 })
@@ -69,7 +115,7 @@ router.get('/', requireAuth, async (req, res) => {
 
     res.json(courses)
   } catch (err) {
-    console.error('[GET /api/courses]', err)
+    logger.error({ err }, '[GET /api/courses]')
     res.status(500).json({ error: 'Failed to fetch courses' })
   }
 })
@@ -89,7 +135,8 @@ router.get('/:id', requireAuth, async (req, res) => {
           include: {
             concept: {
               include: {
-                theoryBlocks: { orderBy: { order: 'asc' as const } }
+                theoryBlocks:    { orderBy: { order: 'asc' as const } },
+                visualizations:  { orderBy: { order: 'asc' as const } },
               }
             }
           }
@@ -153,12 +200,20 @@ router.get('/:id', requireAuth, async (req, res) => {
           id: cl.conceptId,
           name: cl.concept.name,
           order: cl.order,
+          conceptType: cl.concept.conceptType ?? undefined,
           theoryBlocks: cl.concept.theoryBlocks.map(tb => ({
             id: tb.id,
             order: tb.order,
             pendingRevision: tb.pendingRevision,
             content: tb.content
-          }))
+          })),
+          visualizations: cl.concept.visualizations.map(v => ({
+            id: v.id,
+            order: v.order,
+            visualizationType: v.visualizationType,
+            visualizationParams: v.visualizationParams as Record<string, unknown>,
+            visualization: v.visualization ?? undefined,
+          })),
         })),
         exercises: m.exercises.map(ex => ({
           id: ex.id,
@@ -171,7 +226,10 @@ router.get('/:id', requireAuth, async (req, res) => {
           correctIndex: ex.correctIndex,
           explanation: ex.explanation,
           sampleAnswer: ex.sampleAnswer,
-          rubric: ex.rubric
+          rubric: ex.rubric,
+          visualizationHtml:   ex.visualizationHtml ?? null,
+          visualizationType:   ex.visualizationType ?? null,
+          visualizationParams: ex.visualizationParams as Record<string, unknown> | null ?? null,
         }))
       }))
     }
@@ -179,7 +237,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     res.json(courseDetail)
 
   } catch (err) {
-    console.error('[GET /api/courses/:id]', err)
+    logger.error({ err }, '[GET /api/courses/:id]')
     res.status(500).json({ error: 'Failed to fetch course' })
   }
 })
@@ -210,7 +268,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     await prisma.course.update({ where: { id: courseId }, data: { status } })
     res.status(204).send()
   } catch (err) {
-    console.error('[PATCH /api/courses/:id]', err)
+    logger.error({ err }, '[PATCH /api/courses/:id]')
     res.status(500).json({ error: 'Failed to update course' })
   }
 })
@@ -258,7 +316,7 @@ router.post('/:id/enrollments', requireAuth, async (req, res) => {
 
     res.status(201).json({ id: enrollment.id, status: enrollment.status })
   } catch (err: any) {
-    console.error('[POST /api/courses/:id/enrollments]', err)
+    logger.error({ err }, '[POST /api/courses/:id/enrollments]')
     res.status(500).json({ error: 'Failed to create enrollment' })
   }
 })
@@ -285,8 +343,142 @@ router.get('/:id/enrollments', requireAuth, async (req, res) => {
       createdAt: e.createdAt.toISOString(),
     })))
   } catch (err) {
-    console.error('[GET /api/courses/:id/enrollments]', err)
+    logger.error({ err }, '[GET /api/courses/:id/enrollments]')
     res.status(500).json({ error: 'Failed to fetch enrollments' })
+  }
+})
+
+// POST /api/courses/:id/generate — retrigger generation for a FAILED course
+router.post('/:id/generate', requireAuth, async (req, res) => {
+  const courseId = parseInt(req.params.id as string)
+  if (isNaN(courseId)) { res.status(400).json({ error: 'Invalid course ID' }); return }
+
+  try {
+    const course = await prisma.course.findUnique({ where: { id: courseId, teacherId: req.user!.id } })
+    if (!course) { res.status(404).json({ error: 'Course not found' }); return }
+    if (course.status !== 'FAILED') { res.status(409).json({ error: 'Course is not in a failed state' }); return }
+
+    await prisma.course.update({ where: { id: courseId }, data: { status: 'GENERATING' } })
+    triggerGeneration(courseId).catch(err => llmLogger.error({ err }, 'triggerGeneration failed'))
+    res.status(202).json({ message: 'Generation started' })
+  } catch (err) {
+    logger.error({ err }, '[POST /api/courses/:id/generate]')
+    res.status(500).json({ error: 'Failed to start generation' })
+  }
+})
+
+// GET /api/courses/:id/analytics — teacher fetches per-student progress for a course
+router.get('/:id/analytics', requireAuth, async (req, res) => {
+  const courseId = parseInt(req.params.id as string)
+  if (isNaN(courseId)) { res.status(400).json({ error: 'Invalid course ID' }); return }
+
+  try {
+    // Verify the course exists and belongs to this teacher
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, teacherId: req.user!.id },
+      select: { id: true },
+    })
+    if (!course) { res.status(404).json({ error: 'Course not found' }); return }
+
+    // Round 1 — enrolled students + preflight date range in parallel (both only need courseId)
+    const [enrollments, [rangeRow]] = await Promise.all([
+      prisma.enrollment.findMany({
+        where: { courseId, status: 'ACTIVE' },
+        select: {
+          userId: true,
+          student: { select: { user: { select: { email: true } } } },
+        },
+      }),
+      prisma.$queryRaw<{ min: Date | null; max: Date | null }[]>`
+        SELECT MIN("createdAt") AS min, MAX("createdAt") AS max
+        FROM "ExerciseAttempt"
+        WHERE "courseId" = ${courseId}
+      `,
+    ])
+
+    const validEnrollments = enrollments.filter(
+      (e): e is typeof e & { userId: string; student: NonNullable<typeof e.student> } =>
+        e.userId !== null && e.student !== null
+    )
+
+    if (validEnrollments.length === 0) {
+      res.json({ students: [], attemptsOverTime: [], granularity: 'day' } satisfies GetCourseAnalyticsResponse)
+      return
+    }
+
+    const userIds = validEnrollments.map(e => e.userId)
+    const granularity = pickGranularity(rangeRow!.min, rangeRow!.max)
+
+    // Round 2 — progress, sessions, and attempt time-series in parallel, scoped to this course
+    const [progressRows, sessionRows, attemptRows] = await Promise.all([
+      prisma.studentConceptProgress.findMany({
+        where: {
+          userId: { in: userIds },
+          concept: { courseId },
+        },
+        select: { userId: true, score: true, lastActivityAt: true },
+      }),
+      prisma.moduleSession.findMany({
+        where: {
+          userId: { in: userIds },
+          module: { courseId },
+        },
+        select: { userId: true, updatedAt: true },
+      }),
+      prisma.$queryRaw<{ date: Date; correct: bigint; incorrect: bigint; total: bigint }[]>`
+        SELECT
+          DATE_TRUNC(${granularity}, "createdAt") AS date,
+          COUNT(*) FILTER (WHERE "isCorrect" = true)  AS correct,
+          COUNT(*) FILTER (WHERE "isCorrect" = false) AS incorrect,
+          COUNT(*)                                     AS total
+        FROM "ExerciseAttempt"
+        WHERE "courseId" = ${courseId}
+        GROUP BY 1
+        ORDER BY 1 ASC
+      `,
+    ])
+
+    // Group rows by userId for O(n) lookup
+    const progressByUser = new Map<string, { score: number; lastActivityAt: Date }[]>()
+    for (const row of progressRows) {
+      if (!progressByUser.has(row.userId)) progressByUser.set(row.userId, [])
+      progressByUser.get(row.userId)!.push({ score: row.score, lastActivityAt: row.lastActivityAt })
+    }
+
+    const sessionsByUser = new Map<string, { updatedAt: Date }[]>()
+    for (const row of sessionRows) {
+      if (!sessionsByUser.has(row.userId)) sessionsByUser.set(row.userId, [])
+      sessionsByUser.get(row.userId)!.push({ updatedAt: row.updatedAt })
+    }
+
+    const students = validEnrollments
+      .map(e => ({
+        email: e.student.user.email,
+        progress: computeProgress(progressByUser.get(e.userId) ?? []),
+        lastActiveAt: latestSession(sessionsByUser.get(e.userId) ?? []),
+      }))
+      // Default sort: most recently active first; nulls last
+      .sort((a, b) => {
+        const av = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0
+        const bv = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0
+        return bv - av
+      })
+
+    const result: GetCourseAnalyticsResponse = {
+      students,
+      granularity,
+      attemptsOverTime: attemptRows.map(r => ({
+        date:      r.date.toISOString(),
+        correct:   Number(r.correct),
+        incorrect: Number(r.incorrect),
+        total:     Number(r.total),
+      })),
+    }
+
+    res.json(result)
+  } catch (err) {
+    logger.error({ err }, '[GET /api/courses/:id/analytics]')
+    res.status(500).json({ error: 'Failed to fetch analytics' })
   }
 })
 
@@ -299,7 +491,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     res.status(204).send()
   } catch (err: any) {
     if (err?.code === 'P2025') { res.status(404).json({ error: 'Course not found' }); return }
-    console.error('[DELETE /api/courses/:id]', err)
+    logger.error({ err }, '[DELETE /api/courses/:id]')
     res.status(500).json({ error: 'Failed to delete course' })
   }
 })

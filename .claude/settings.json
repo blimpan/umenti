@@ -1,3 +1,5 @@
 {
-  "apiKeyHelper": ".claude/get_api_key.sh"
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true
+  }
 }

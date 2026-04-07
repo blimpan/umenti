@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "katex/dist/katex.min.css";
 
 :root {
   color-scheme: light; /* force light mode — dark mode is a future feature */
@@ -87,8 +88,56 @@
   }
 }
 
+@layer utilities {
+  button, a, [role="button"], select, label[for] {
+    cursor: pointer;
+  }
+}
+
 .debug {
   border: 1px dotted red;
+}
+
+/* History pagination: fade-in for newly prepended messages in SessionShell.
+   Slides up from slightly below (positive Y). animation-delay is set inline
+   per-message to stagger the batch bottom-to-top. */
+@keyframes messageHistoryIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.message-history-in {
+  animation: messageHistoryIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* AI typing indicator — three-dot bounce */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+  30%           { transform: translateY(-5px); opacity: 1;   }
+}
+.typing-dot {
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Exercise card animations */
+@keyframes card-border-pulse {
+  0%, 100% { border-color: var(--border); }
+  50%       { border-color: oklch(0.600 0.118 180); }
+}
+.card-evaluating {
+  animation: card-border-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes card-shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-3px); }
+  40%       { transform: translateX(3px); }
+  60%       { transform: translateX(-2px); }
+  80%       { transform: translateX(2px); }
+}
+.card-shake {
+  animation: card-shake 0.3s ease-out;
 }
 
 /* Markdown rendered content. Remeber that we can swap to using Tailwind's Typography plugin to have this handled for us (but with less control) */
@@ -124,3 +173,20 @@
   margin-bottom: 0.6em;
 }
 .md-content pre code { background: none; padding: 0; }
+
+/* TipTap placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
+
+@keyframes border-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45); }
+  50%       { box-shadow: 0 0 0 7px rgba(13, 148, 136, 0.1); }
+}
+.border-pulse {
+  animation: border-pulse 1.4s ease-in-out infinite;
+}

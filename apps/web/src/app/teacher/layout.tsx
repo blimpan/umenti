@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
+import { TeacherGenerationPoller } from './TeacherGenerationPoller'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -14,6 +15,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
       <main className="flex-1 min-w-0">
         {children}
       </main>
+      <TeacherGenerationPoller />
     </div>
   )
 }

@@ -2,10 +2,10 @@
 
 import { Controller, UseFormReturn } from 'react-hook-form'
 import type { CourseWizardInput } from '@metis/types'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import SuggestedInput from './SuggestedInput'
 
 const LANGUAGES = ['English', 'Swedish', 'Norwegian', 'Danish', 'Finnish', 'German', 'French', 'Spanish']
 
@@ -15,7 +15,10 @@ type Props = {
 }
 
 export default function StepBasics({ form, onNext }: Props) {
-  const { register, control, formState: { errors } } = form
+  const { register, control, formState: { errors }, watch, setValue } = form
+  const name = watch('name')
+  const subject = watch('subject')
+  const language = watch('language')
 
   return (
     <div className="space-y-6">
@@ -26,11 +29,23 @@ export default function StepBasics({ form, onNext }: Props) {
 
       <div className="space-y-4">
         <Field label="Course name" error={errors.name?.message}>
-          <Input {...register('name')} placeholder="e.g. 9th Grade Mathematics" />
+          <SuggestedInput
+            {...register('name')}
+            field="name"
+            context={{ language }}
+            placeholder="e.g. 9th Grade Mathematics"
+            onAccept={(val) => setValue('name', val, { shouldValidate: true })}
+          />
         </Field>
 
         <Field label="Subject" error={errors.subject?.message}>
-          <Input {...register('subject')} placeholder="e.g. Mathematics" />
+          <SuggestedInput
+            {...register('subject')}
+            field="subject"
+            context={{ name }}
+            placeholder="e.g. Mathematics"
+            onAccept={(val) => setValue('subject', val, { shouldValidate: true })}
+          />
         </Field>
 
         <Field label="Language" error={errors.language?.message}>
@@ -53,7 +68,13 @@ export default function StepBasics({ form, onNext }: Props) {
         </Field>
 
         <Field label="Target audience" error={errors.targetAudience?.message}>
-          <Input {...register('targetAudience')} placeholder="e.g. Students aged 14–15" />
+          <SuggestedInput
+            {...register('targetAudience')}
+            field="targetAudience"
+            context={{ name, subject, language }}
+            placeholder="e.g. Students aged 14-15"
+            onAccept={(val) => setValue('targetAudience', val, { shouldValidate: true })}
+          />
         </Field>
       </div>
 

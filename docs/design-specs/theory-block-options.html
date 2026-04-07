@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Metis — Theory Block Options</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --white:    #ffffff;
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --teal:     #0d9488;
+      --radius:   10px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: #f3f4f6;
+      color: var(--gray-900);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ── Page chrome ── */
+    .page-header {
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 40px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo {
+      width: 28px; height: 28px; background: var(--teal);
+      border-radius: 7px; display: flex; align-items: center;
+      justify-content: center; color: #fff; font-weight: 800; font-size: 13px;
+    }
+    .page-header h1 { font-size: 14px; font-weight: 700; }
+    .page-header span { font-size: 13px; color: var(--gray-400); font-weight: 400; margin-left: 4px; }
+
+    /* ── Layout ── */
+    .columns {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--gray-200);
+      max-width: 1100px;
+      margin: 48px auto;
+      border: 1px solid var(--gray-200);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .col {
+      background: var(--white);
+      padding: 36px 32px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .option-label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      margin-bottom: 6px;
+    }
+    .option-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--gray-900);
+      margin-bottom: 4px;
+    }
+    .option-desc {
+      font-size: 13px;
+      color: var(--gray-500);
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+
+    /* ── Shared feed chrome ── */
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* AI message */
+    .msg-ai { display: flex; gap: 9px; }
+    .avatar {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--teal); color: #fff;
+      font-size: 10px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .bubble-ai {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 0 var(--radius) var(--radius) var(--radius);
+      padding: 10px 14px;
+      box-shadow: var(--shadow-sm);
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--gray-800);
+    }
+
+    /* System message */
+    .sys-msg {
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--gray-400);
+    }
+
+    /* Exercise card stub */
+    .exercise-stub {
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: var(--white);
+      box-shadow: var(--shadow-sm);
+    }
+    .exercise-stub p { font-size: 13px; font-weight: 600; color: var(--gray-900); margin-bottom: 10px; }
+    .exercise-btn {
+      background: var(--teal); color: #fff;
+      border: none; border-radius: 6px;
+      padding: 6px 16px; font-family: inherit;
+      font-size: 12px; font-weight: 700;
+    }
+
+    /* ════════════════════════════════════════
+       OPTION A — Gray surface card
+    ════════════════════════════════════════ */
+    .theory-a {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .theory-a .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      margin-bottom: 8px;
+    }
+    .theory-a p {
+      font-size: 13px;
+      color: var(--gray-700);
+      line-height: 1.7;
+    }
+
+    /* ════════════════════════════════════════
+       OPTION B — Editorial left rule
+    ════════════════════════════════════════ */
+    .theory-b {
+      border-left: 2px solid var(--gray-300);
+      padding-left: 14px;
+    }
+    .theory-b .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      margin-bottom: 7px;
+    }
+    .theory-b p {
+      font-size: 13px;
+      color: var(--gray-700);
+      line-height: 1.7;
+    }
+
+    /* ════════════════════════════════════════
+       OPTION C — 3D raised rectangle
+    ════════════════════════════════════════ */
+    .theory-c {
+      background: var(--white);
+      border: 1.5px solid var(--gray-300);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      /* Hard offset with no blur = solid visible side faces,
+         creating a physical 3D rectangle appearance */
+      box-shadow: 0 4px 0 0 var(--gray-300);
+      /* Shift the card slightly so the side faces are clearly visible */
+      position: relative;
+    }
+    .theory-c .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      margin-bottom: 8px;
+    }
+    .theory-c p {
+      font-size: 13px;
+      color: var(--gray-700);
+      line-height: 1.7;
+    }
+
+    /* ── Trait list ── */
+    .traits {
+      margin-top: auto;
+      padding-top: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .trait {
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--gray-500);
+      line-height: 1.45;
+    }
+    .trait-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--gray-300);
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+    .trait.pro .trait-dot  { background: #16a34a; }
+    .trait.con .trait-dot  { background: #dc2626; }
+
+    /* ── Recommendation banner ── */
+    .rec-banner {
+      max-width: 1100px;
+      margin: -32px auto 48px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: #166534;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="logo">M</div>
+  <h1>Metis <span>— Theory block options</span></h1>
+</header>
+
+<div class="columns">
+
+  <!-- ══════════════ OPTION A ══════════════ -->
+  <div class="col">
+    <div class="option-label">Option A</div>
+    <div class="option-title">Gray surface card</div>
+    <div class="option-desc">Off-white card, gray border. Boxed off from the chat.</div>
+
+    <div class="feed">
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">Before we go further, here's the key concept you'll need.</div>
+      </div>
+
+      <div class="theory-a">
+        <div class="label">Theory</div>
+        <p>The S phase is when the cell replicates its entire DNA. Each chromosome is duplicated so that when the cell divides, both daughter cells receive a complete copy of the genome.</p>
+      </div>
+
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">With that in mind, let's try an exercise.</div>
+      </div>
+
+      <div class="exercise-stub">
+        <p>What is the purpose of the S phase?</p>
+        <button class="exercise-btn">Submit</button>
+      </div>
+    </div>
+
+    <div class="traits">
+      <div class="trait pro"><div class="trait-dot"></div>Clear separation from messages — obvious it's a reference block</div>
+      <div class="trait pro"><div class="trait-dot"></div>No color — gray-50 reads as neutral background, not accent</div>
+      <div class="trait con"><div class="trait-dot"></div>Card shape competes visually with the exercise card below it</div>
+      <div class="trait con"><div class="trait-dot"></div>Breaks feed rhythm — feels like switching from chat to document</div>
+    </div>
+  </div>
+
+  <!-- ══════════════ OPTION B ══════════════ -->
+  <div class="col" style="background: #fafffe;">
+    <div class="option-label" style="color: var(--teal);">Option B · Recommended</div>
+    <div class="option-title">Editorial left rule</div>
+    <div class="option-desc">A thin gray rule, no background. Integrated into the feed.</div>
+
+    <div class="feed">
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">Before we go further, here's the key concept you'll need.</div>
+      </div>
+
+      <div class="theory-b">
+        <div class="label">Theory</div>
+        <p>The S phase is when the cell replicates its entire DNA. Each chromosome is duplicated so that when the cell divides, both daughter cells receive a complete copy of the genome.</p>
+      </div>
+
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">With that in mind, let's try an exercise.</div>
+      </div>
+
+      <div class="exercise-stub">
+        <p>What is the purpose of the S phase?</p>
+        <button class="exercise-btn">Submit</button>
+      </div>
+    </div>
+
+    <div class="traits">
+      <div class="trait pro"><div class="trait-dot"></div>Feed stays unified — theory sits alongside messages, not apart</div>
+      <div class="trait pro"><div class="trait-dot"></div>Left rule is a universal "blockquote / reference" convention</div>
+      <div class="trait pro"><div class="trait-dot"></div>No visual competition with the exercise card</div>
+      <div class="trait con"><div class="trait-dot"></div>Relies on the "THEORY" label to signal content type — label must be readable</div>
+    </div>
+  </div>
+
+  <!-- ══════════════ OPTION C ══════════════ -->
+  <div class="col">
+    <div class="option-label">Option C</div>
+    <div class="option-title">3D raised card</div>
+    <div class="option-desc">Hard offset shadow with no blur. Solid visible side faces make it read as a physical object.</div>
+
+    <div class="feed">
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">Before we go further, here's the key concept you'll need.</div>
+      </div>
+
+      <div class="theory-c">
+        <div class="label">Theory</div>
+        <p>The S phase is when the cell replicates its entire DNA. Each chromosome is duplicated so that when the cell divides, both daughter cells receive a complete copy of the genome.</p>
+      </div>
+
+      <div class="msg-ai">
+        <div class="avatar">M</div>
+        <div class="bubble-ai">With that in mind, let's try an exercise.</div>
+      </div>
+
+      <div class="exercise-stub">
+        <p>What is the purpose of the S phase?</p>
+        <button class="exercise-btn">Submit</button>
+      </div>
+    </div>
+
+    <div class="traits">
+      <div class="trait pro"><div class="trait-dot"></div>Unmistakably distinct — no other element in the feed looks like this</div>
+      <div class="trait pro"><div class="trait-dot"></div>Uses shape and depth only, no color</div>
+      <div class="trait con"><div class="trait-dot"></div>Strong visual weight — appropriate only if theory blocks are rare in the feed</div>
+      <div class="trait con"><div class="trait-dot"></div>May feel playful / skeuomorphic depending on the overall aesthetic direction</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="rec-banner">
+  ✓ Recommendation: Option B — the left rule keeps the feed unified while giving theory a recognisable structural anchor without any color.
+</div>
+
+</body>
+</html>

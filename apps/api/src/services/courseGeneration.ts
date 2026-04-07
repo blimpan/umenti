@@ -1,9 +1,48 @@
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { PrismaClient } from '@prisma/client'
+import prisma from '../lib/prisma'
 import { getModel } from '../lib/llm'
+import { llmLogger } from '../lib/logger'
+import { validateMathSyntax, MathValidationError, MATH_SYNTAX_CONTRACT } from '../lib/mathValidation'
 
-const prisma = new PrismaClient()
+const TEMPLATE_CATALOG = `
+CONCEPT CLASSIFICATION
+Classify each concept with one of:
+  geometric    — spatial relationships, shapes, angles, transformations
+  algebraic    — functions with tunable parameters (slope, intercept, coefficients)
+  statistical  — distributions, probability, data summaries
+  algorithmic  — step-by-step procedures or processes
+  definitional — vocabulary, taxonomy, pure classification
+  relational   — connections between concepts, sets, hierarchies
+
+VISUALIZATION TEMPLATES
+Only geometric, algebraic, and statistical concepts may have visualizations.
+Set visualizations to [] for all other types.
+
+For eligible concepts choose one or more templates:
+
+  cartesian_graph  (algebraic)
+    mode: 'linear' | 'quadratic' | 'sinusoidal'
+    params (linear):     { mode, slope, intercept }
+    params (quadratic):  { mode, a, b, c }
+    params (sinusoidal): { mode, amplitude, frequency, phase }
+    optional: xMin, xMax
+
+  unit_circle  (geometric)
+    params: { initialAngle, unit ('degrees'|'radians'), showComponents, showTan }
+
+  probability_distribution  (statistical)
+    params (normal):   { distribution: 'normal', mean, stdDev }
+    params (binomial): { distribution: 'binomial', n, p }
+
+  geometric_shape_explorer  (geometric)
+    params: { shape ('rectangle'|'circle'|'right_triangle'), width+height OR radius OR base+legHeight, showArea, showPerimeter }
+
+Set templateId to the template name above.
+Set templateParamsJson to a JSON-encoded string of the params object.
+Use templateId "custom" only when no template fits AND the concept is strongly spatial or dynamic.
+When templateId is "custom", set visualizationHtml to a complete self-contained HTML document.
+`.trim()
 
 // ---------------------------------------------------------------------------
 // Zod schemas — define the structured output the LLM must return
@@ -18,24 +57,45 @@ const Pass1Schema = z.object({
   }))
 })
 
+const Pass2VisualizationSchema = z.object({
+  templateId:         z.string(),           // "cartesian_graph" | "unit_circle" | etc. | "custom"
+  templateParamsJson: z.string(),           // JSON-encoded params; empty string for 'custom'
+  visualizationHtml:  z.string().nullable(), // only populated when templateId = 'custom'
+})
+
 const Pass2Schema = z.object({
   concepts: z.array(z.object({
-    name:         z.string(),
-    theoryBlocks: z.array(z.string()),
+    name:           z.string(),
+    conceptType:    z.enum(['geometric', 'algebraic', 'statistical', 'algorithmic', 'definitional', 'relational']),
+    theoryBlocks:   z.array(z.string()),
+    visualizations: z.array(Pass2VisualizationSchema),
+    // visualizations is empty array for algorithmic, definitional, relational types
   })),
-  // Flat schema — avoids oneOf/anyOf which Anthropic structured output does not support.
-  // type-specific fields are optional; the `type` enum drives which are populated.
-  // Array constraints above minItems:1 are also unsupported, so we rely on the prompt
-  // to instruct the LLM (e.g. "provide exactly 4 options").
+})
+
+// Flat schema — avoids oneOf/anyOf which Anthropic structured output does not support.
+// type-specific fields are optional; the `type` enum drives which are populated.
+// Array constraints above minItems:1 are also unsupported, so we rely on the prompt
+// to instruct the LLM (e.g. "provide exactly 4 options").
+const Pass3Schema = z.object({
   exercises: z.array(z.object({
-    type:         z.enum(['multiple_choice', 'free_text']),
-    conceptNames: z.array(z.string()),
-    question:     z.string(),
-    options:      z.array(z.string()).optional(),
-    correctIndex: z.number().optional(),
-    explanation:  z.string().optional(),
-    sampleAnswer: z.string().optional(),
-    rubric:       z.string().optional(),
+    type:              z.enum(['multiple_choice', 'free_text', 'interactive']),
+    conceptNames:      z.array(z.string()),
+    question:          z.string(),
+    // multiple_choice fields
+    options:           z.array(z.string()).nullable(),
+    correctIndex:      z.number().nullable(),
+    explanation:       z.string().nullable(),
+    // free_text fields
+    sampleAnswer:      z.string().nullable(),
+    rubric:            z.string().nullable(),
+    // interactive — LLM picks its own template independently
+    templateId:         z.string().nullable(),       // e.g. "cartesian_graph"
+    templateParamsJson: z.string().nullable(),       // JSON-encoded initial params
+    visualizationHtml:  z.string().nullable(),       // only when templateId = "custom"
+    // targetState is JSON-encoded string — z.record() generates propertyNames which
+    // OpenAI/Anthropic structured output forbids. Parse to object after generation.
+    targetState:        z.string().nullable(),
   })),
 })
 
@@ -46,22 +106,89 @@ const Pass2Schema = z.object({
 type FullCourse  = Awaited<ReturnType<typeof loadCourseData>>
 type Pass1Output = z.infer<typeof Pass1Schema>
 type Pass2Output = z.infer<typeof Pass2Schema>
+type Pass3Output = z.infer<typeof Pass3Schema>
+type ModuleConceptWithBlocks = Awaited<ReturnType<typeof loadModuleConcepts>>[number]
+
+// ---------------------------------------------------------------------------
+// Math-validated generation helper
+// ---------------------------------------------------------------------------
+
+// Runs generateText, validates all string fields in the output against the
+// math syntax contract, and retries once with a corrective prompt if errors
+// are found. Always returns output — on second failure it logs and proceeds
+// rather than blocking the pipeline entirely.
+async function generateWithMathValidation<T>(opts: {
+  tag:              string          // used in log lines, e.g. "Pass 2 module 3"
+  schema:           z.ZodType<T>
+  prompt:           string
+  extractStrings:   (output: T) => string[]
+  correctivePrompt: (output: T, errors: MathValidationError[]) => string
+}): Promise<T> {
+  const tag = `[generation:${opts.tag}]`
+
+  const raw = await generateText({
+    model:  getModel(),
+    output: Output.object({ schema: opts.schema }),
+    prompt: opts.prompt,
+  })
+
+  llmLogger.info({ finishReason: raw.finishReason, usage: raw.usage }, tag)
+  if (raw.finishReason !== 'stop') {
+    llmLogger.warn({ finishReason: raw.finishReason }, `${tag} unexpected finishReason — output may be truncated`)
+  }
+
+  const first = raw.output as T
+
+  const allErrors = opts.extractStrings(first).flatMap(s => validateMathSyntax(s).errors)
+  if (allErrors.length === 0) {
+    llmLogger.info(tag + ' math validation passed')
+    return first
+  }
+
+  llmLogger.warn({ errorCount: allErrors.length, errors: allErrors }, `${tag} math validation failed — retrying once`)
+
+  // TODO: the corrective prompt includes the full output JSON which can be large
+  // for modules with many exercises. Consider sending only the failing field paths
+  // and their values to reduce token spend on the retry.
+  const retryRaw = await generateText({
+    model:  getModel(),
+    output: Output.object({ schema: opts.schema }),
+    prompt: opts.correctivePrompt(first, allErrors),
+  })
+
+  llmLogger.info({ finishReason: retryRaw.finishReason, usage: retryRaw.usage }, `${tag} retry`)
+  if (retryRaw.finishReason !== 'stop') {
+    llmLogger.warn({ finishReason: retryRaw.finishReason }, `${tag} retry had unexpected finishReason`)
+  }
+
+  const second = retryRaw.output as T
+
+  const retryErrors = opts.extractStrings(second).flatMap(s => validateMathSyntax(s).errors)
+  if (retryErrors.length > 0) {
+    llmLogger.error({ errorCount: retryErrors.length, errors: retryErrors }, `${tag} math validation still failing after retry — persisting anyway`)
+  } else {
+    llmLogger.info(`${tag} math validation passed after retry`)
+  }
+
+  return second
+}
 
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
 export async function triggerGeneration(courseId: number): Promise<void> {
-  console.log(`[generation] Starting pipeline for course ${courseId}`)
+  llmLogger.info({ courseId }, '[generation] Starting pipeline')
   try {
     const course = await loadCourseData(courseId)
     await runPass1(course)
     await runPass2(course)
+    await runPass3(course)
     await prisma.course.update({ where: { id: courseId }, data: { status: 'DRAFT' } })
-    console.log(`[generation] Course ${courseId} complete`)
+    llmLogger.info({ courseId }, '[generation] Pipeline complete')
   } catch (err) {
-    console.error(`[generation] Course ${courseId} failed:`, err)
-    await prisma.course.update({ where: { id: courseId }, data: { status: 'FAILED' } }).catch(console.error)
+    llmLogger.error({ err, courseId }, '[generation] Pipeline failed')
+    await prisma.course.update({ where: { id: courseId }, data: { status: 'FAILED' } }).catch(e => llmLogger.error({ err: e }, '[generation] Failed to set FAILED status'))
   }
 }
 
@@ -90,7 +217,7 @@ async function loadCourseData(courseId: number) {
 // ---------------------------------------------------------------------------
 
 async function runPass1(course: FullCourse): Promise<void> {
-  console.log(`[generation] Pass 1 — skeleton for course ${course.id}`)
+  llmLogger.info({ courseId: course.id }, '[generation] Pass 1 — skeleton')
 
   const { output: pass1Result } = await generateText({
     model:  getModel(),
@@ -184,7 +311,7 @@ Return only structured content for the schema with this top-level shape:
 
 async function runPass2(course: FullCourse): Promise<void> {
   for (const module of course.courseModules) {
-    console.log(`[generation] Pass 2 — module ${module.order + 1}/${course.courseModules.length}: "${module.name}"`)
+    llmLogger.info({ moduleId: module.id, name: module.name, progress: `${module.order + 1}/${course.courseModules.length}` }, '[generation] Pass 2 — module')
 
     // Fetch concepts already created for this course so we can deduplicate
     const existingConcepts = await prisma.concept.findMany({
@@ -192,14 +319,25 @@ async function runPass2(course: FullCourse): Promise<void> {
       select: { id: true, name: true },
     })
 
-    const { output: pass2Result } = await generateText({
-      model:  getModel(),
-      output: Output.object({ schema: Pass2Schema }),
+    const pass2 = await generateWithMathValidation({
+      tag:    `Pass2 module=${module.id}`,
+      schema: Pass2Schema,
       prompt: buildPass2Prompt(course, module, existingConcepts),
-    })
-    const pass2 = pass2Result as Pass2Output
+      extractStrings: (output) => output.concepts.flatMap(c => c.theoryBlocks),
+      correctivePrompt: (output, errors) => `
+Your previous response contained math formatting errors. Fix ONLY the math syntax — do not change any content.
 
-    await writeModuleContent(course.id, module.id, pass2, existingConcepts)
+ERRORS FOUND
+${errors.map(e => `- [${e.rule}] ${e.detail}`).join('\n')}
+
+${MATH_SYNTAX_CONTRACT}
+
+PREVIOUS OUTPUT (fix the math syntax in this)
+${JSON.stringify(output, null, 2)}
+`.trim(),
+    })
+
+    await writeModuleConcepts(course.id, module.id, pass2, existingConcepts)
   }
 }
 
@@ -233,11 +371,11 @@ ${existingNames.length > 0
   ? `Concepts already created in earlier modules — reuse the exact name if semantically equivalent, otherwise introduce a new name:\n${existingNames.map(n => `- ${n}`).join('\n')}`
   : ''}
 
-Generate:
-1. The key concepts for this module. For each concept include ordered theory paragraphs written in clear markdown prose.
-2. Exercises that test those concepts. Mix multiple choice and free text. Reference concepts by the exact name you used above.
-   - multiple_choice: provide exactly 4 options; correctIndex must be 0, 1, 2, or 3 (the index of the correct option)
-   - free_text: provide a sampleAnswer and a rubric describing what a good answer looks like
+Generate the key concepts for this module. For each concept include ordered theory paragraphs written in clear markdown prose.
+
+${MATH_SYNTAX_CONTRACT}
+
+${TEMPLATE_CATALOG}
 
 Respond in ${course.language}.`.trim()
 }
@@ -246,7 +384,7 @@ Respond in ${course.language}.`.trim()
 // DB write — module content
 // ---------------------------------------------------------------------------
 
-async function writeModuleContent(
+async function writeModuleConcepts(
   courseId:         number,
   moduleId:         number,
   output:           Pass2Output,
@@ -254,42 +392,190 @@ async function writeModuleContent(
 ): Promise<void> {
   const conceptMap = await resolveConcepts(courseId, moduleId, output.concepts, existingConcepts)
 
-  // Theory blocks
   for (const gen of output.concepts) {
     const concept = conceptMap.get(gen.name)
     if (!concept) continue
+
+    // Store conceptType on the Concept row
+    await prisma.concept.update({
+      where: { id: concept.id },
+      data:  { conceptType: gen.conceptType },
+    })
+
     await prisma.theoryBlock.createMany({
       data: gen.theoryBlocks.map((content, order) => ({ conceptId: concept.id, content, order })),
     })
-  }
 
-  // Exercises
+    // Write each visualization as a ConceptVisualization row
+    if (gen.visualizations.length > 0) {
+      await prisma.conceptVisualization.createMany({
+        data: gen.visualizations.map((viz, order) => ({
+          conceptId:          concept.id,
+          order,
+          visualizationType:  viz.templateId,
+          visualizationParams: viz.templateId !== 'custom' && viz.templateParamsJson
+            ? (() => { try { return JSON.parse(viz.templateParamsJson) } catch { return {} } })()
+            : {},
+          visualization: viz.templateId === 'custom' ? viz.visualizationHtml : null,
+        })),
+      })
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pass 3 — exercise generation (sequential, after all concepts exist)
+// ---------------------------------------------------------------------------
+
+async function loadModuleConcepts(moduleId: number) {
+  return prisma.moduleConcept.findMany({
+    where:   { moduleId },
+    orderBy: { order: 'asc' },
+    include: {
+      concept: {
+        include: { theoryBlocks: { orderBy: { order: 'asc' } } },
+      },
+    },
+  })
+}
+
+async function runPass3(course: FullCourse): Promise<void> {
+  for (const module of course.courseModules) {
+    llmLogger.info({ moduleId: module.id, name: module.name, progress: `${module.order + 1}/${course.courseModules.length}` }, '[generation] Pass 3 — module')
+
+    const moduleConcepts = await loadModuleConcepts(module.id)
+
+    if (moduleConcepts.length === 0) {
+      llmLogger.warn({ moduleId: module.id, name: module.name }, '[generation] Module has no concepts — skipping exercise generation')
+      continue
+    }
+
+    const pass3Result = await generateWithMathValidation({
+      tag:    `Pass3 module=${module.id}`,
+      schema: Pass3Schema,
+      prompt: buildPass3Prompt(course, module, moduleConcepts),
+      extractStrings: (output) => output.exercises.flatMap(ex => [
+        ex.question,
+        ...(ex.options ?? []),
+        ex.explanation  ?? '',
+        ex.sampleAnswer ?? '',
+        ex.rubric       ?? '',
+        // visualizationHtml intentionally excluded — not math text
+      ]),
+      correctivePrompt: (output, errors) => `
+Your previous response contained math formatting errors. Fix ONLY the math syntax — do not change any content.
+
+ERRORS FOUND
+${errors.map(e => `- [${e.rule}] ${e.detail}`).join('\n')}
+
+${MATH_SYNTAX_CONTRACT}
+
+PREVIOUS OUTPUT (fix the math syntax in this)
+${JSON.stringify(output, null, 2)}
+`.trim(),
+    })
+
+    await writeModuleExercises(module.id, pass3Result, moduleConcepts)
+  }
+}
+
+function buildPass3Prompt(
+  course:         FullCourse,
+  module:         FullCourse['courseModules'][number],
+  moduleConcepts: ModuleConceptWithBlocks[],
+): string {
+  const conceptsBlock = moduleConcepts
+    .map(mc => {
+      const theory = mc.concept.theoryBlocks.map(b => b.content).join('\n\n')
+      return `Concept: ${mc.concept.name}\n${theory}`
+    })
+    .join('\n\n---\n\n')
+
+  return `
+You are generating exercises for one module of a course. Your exercises must be grounded in the concept theory below.
+
+Course: ${course.name}
+Subject: ${course.subject}
+Language: ${course.language}
+Target audience: ${course.targetAudience}
+
+Module: ${module.name}
+Why this module: ${module.whyThisModule ?? ''}
+Builds on: ${module.buildsOn ?? ''}
+Leads into: ${module.leadsInto ?? ''}
+
+Learning objectives:
+${module.objectives.map(o => `- ${o.text}`).join('\n')}
+
+Learning outcomes:
+${module.outcomes.map(o => `- ${o.text}`).join('\n')}
+
+CONCEPTS AND THEORY FOR THIS MODULE
+${conceptsBlock}
+
+TASK
+Generate exercises that test the concepts above. Requirements:
+- Include a mix of multiple_choice and free_text exercises
+- Reference concepts using the EXACT names listed above (conceptNames field)
+- Each exercise must link to at least one concept
+- multiple_choice: provide exactly 4 options; correctIndex must be 0, 1, 2, or 3
+- free_text: provide a sampleAnswer and a rubric describing what a good answer looks like
+- Exercises must test understanding at the level appropriate for: ${course.targetAudience}
+- You may also generate interactive exercises (type: "interactive") where the student manipulates a visualization to reach a target state. Use this for concepts where hands-on manipulation is more meaningful than text answers.
+- interactive: pick templateId + templateParamsJson (initial state) + targetState (JSON-encoded target). You choose the template independently — it does not need to match any theory block visualization.
+
+${MATH_SYNTAX_CONTRACT}
+
+${TEMPLATE_CATALOG}
+
+Respond in ${course.language}.`.trim()
+}
+
+async function writeModuleExercises(
+  moduleId:       number,
+  output:         Pass3Output,
+  moduleConcepts: ModuleConceptWithBlocks[],
+): Promise<void> {
+  const conceptMap = new Map(moduleConcepts.map(mc => [mc.concept.name.toLowerCase(), mc.concept.id]))
+
   let exerciseOrder = 0
   for (const ex of output.exercises) {
     const conceptIds = ex.conceptNames
-      .map(name => conceptMap.get(name)?.id)
+      .map(name => conceptMap.get(name.toLowerCase()))
       .filter((id): id is number => id !== undefined)
 
     if (conceptIds.length === 0) {
-      console.warn(`[generation] Exercise "${ex.question}" has no valid concept links — skipping`)
+      llmLogger.warn({ question: ex.question.slice(0, 80) }, '[generation] Exercise has no valid concept links — skipping')
       continue
     }
 
     // Normalize MC fields in case the LLM drifted from the prompt instructions
-    const options      = ex.options?.slice(0, 4)
-    const correctIndex = options ? Math.min(ex.correctIndex ?? 0, options.length - 1) : undefined
+    const options      = ex.type === 'multiple_choice' ? (ex.options?.slice(0, 4) ?? undefined) : undefined
+    const correctIndex = options ? Math.min(ex.correctIndex ?? 0, options.length - 1) : null
+
+    // Map to DB enum
+    const exerciseType =
+      ex.type === 'multiple_choice' ? 'MULTIPLE_CHOICE' :
+      ex.type === 'free_text'       ? 'FREE_TEXT'       :
+                                      'INTERACTIVE'
 
     const exercise = await prisma.exercise.create({
       data: {
-        courseModuleId: moduleId,
-        type:           ex.type === 'multiple_choice' ? 'MULTIPLE_CHOICE' : 'FREE_TEXT',
-        question:       ex.question,
-        order:          exerciseOrder++,
+        courseModuleId:    moduleId,
+        type:              exerciseType,
+        question:          ex.question,
+        order:             exerciseOrder++,
         options,
         correctIndex,
-        explanation:    ex.explanation,
-        sampleAnswer:   ex.sampleAnswer,
-        rubric:         ex.rubric,
+        explanation:       ex.explanation,
+        sampleAnswer:      ex.sampleAnswer,
+        rubric:            ex.rubric,
+        visualizationHtml:   ex.visualizationHtml ?? null,
+        visualizationType:   ex.templateId ?? null,
+        visualizationParams: ex.templateId && ex.templateId !== 'custom' && ex.templateParamsJson
+          ? (() => { try { return JSON.parse(ex.templateParamsJson) } catch { return undefined } })()
+          : undefined,
+        targetState: ex.targetState ? JSON.parse(ex.targetState) : undefined,
       },
     })
 
@@ -298,6 +584,10 @@ async function writeModuleContent(
     })
   }
 }
+
+// ---------------------------------------------------------------------------
+// Concept resolution
+// ---------------------------------------------------------------------------
 
 // Resolve LLM-returned concept names to DB records.
 // Reuses an existing Concept if the name matches (case-insensitive), creates a new one otherwise.

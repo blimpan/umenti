@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { apiFetch } from '@/lib/api'
 
 export default function DeleteCourseButton({ courseId }: { courseId: number }) {
   const [confirming, setConfirming] = useState(false)
@@ -11,10 +11,8 @@ export default function DeleteCourseButton({ courseId }: { courseId: number }) {
 
   async function handleDelete() {
     setLoading(true)
-    const { data: { session } } = await createClient().auth.getSession()
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses/${courseId}`, {
+    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses/${courseId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${session!.access_token}` },
     })
     router.refresh()
   }

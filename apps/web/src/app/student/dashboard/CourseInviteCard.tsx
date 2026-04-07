@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { apiFetch } from '@/lib/api'
 import { StudentCourseItem } from '@metis/types'
 
 const API = process.env.NEXT_PUBLIC_API_URL
@@ -17,13 +17,9 @@ export default function CourseInviteCard({ item }: Props) {
 
   async function respond(status: 'ACTIVE' | 'REJECTED') {
     setLoading(status === 'ACTIVE' ? 'accept' : 'reject')
-    const { data: { session } } = await createClient().auth.getSession()
-    await fetch(`${API}/api/enrollments/${item.enrollmentId}`, {
+    await apiFetch(`${API}/api/enrollments/${item.enrollmentId}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session!.access_token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     })
     setLoading(null)

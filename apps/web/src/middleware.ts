@@ -48,7 +48,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on all routes except Next.js internals and static files
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/(student|teacher)/:path*',
+    '/login',
+    '/signup',
   ],
 }

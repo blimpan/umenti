@@ -10,8 +10,9 @@ import StepBasics from './StepBasics'
 import StepStructure from './StepStructure'
 import StepMaterials from './StepMaterials'
 import StepReview from './StepReview'
-import { createClient } from '@/lib/supabase/client'
+import { apiFetch } from '@/lib/api'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 const STORAGE_KEY = 'course-wizard-draft'
 
@@ -57,28 +58,23 @@ export default function CourseWizard() {
   }
 
   async function onSubmit(data: CourseWizardInput) {
-    const { data: { session } } = await createClient().auth.getSession()
-
-    console.log('Submitting course data', data)
-
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses`, {
+    const res = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session!.access_token}`
-      },
-      body: JSON.stringify(data)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     })
 
     if (!res.ok) {
       console.error('Failed to create course', await res.text())
-      alert('Failed to create course. Please try again later.')
+      toast.error('Failed to create course. Please try again.')
       return
     }
 
     localStorage.removeItem(STORAGE_KEY)
     router.push('/teacher/courses')
   }
+
+  const { isSubmitting } = form.formState
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -87,7 +83,7 @@ export default function CourseWizard() {
         {step === 1 && <StepBasics form={form} onNext={goNext} />}
         {step === 2 && <StepStructure form={form} onNext={goNext} onBack={goBack} />}
         {step === 3 && <StepMaterials form={form} onNext={goNext} onBack={goBack} />}
-        {step === 4 && <StepReview form={form} onBack={goBack} onSubmit={form.handleSubmit(onSubmit)} />}
+        {step === 4 && <StepReview form={form} onBack={goBack} onSubmit={form.handleSubmit(onSubmit)} isSubmitting={isSubmitting} />}
       </div>
     </div>
   )

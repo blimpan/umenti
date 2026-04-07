@@ -1,13 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import type { GetCoursesResponse, CourseStatus } from '@metis/types'
+import { timedFetch } from '@/lib/timed-fetch'
 import Link from 'next/link'
 import DeleteCourseButton from './DeleteCourseButton'
+import RetryGenerationButton from './RetryGenerationButton'
 
 export default async function MyCoursesPage() {
   const supabase = await createClient()
   const { data: { session } } = await supabase.auth.getSession()
 
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses`, {
+  const res = await timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses`, {
     headers: { Authorization: `Bearer ${session!.access_token}` },
     cache: 'no-store',
   })
@@ -31,7 +33,11 @@ export default async function MyCoursesPage() {
           <Link
             key={course.id}
             href={`/teacher/courses/${course.id}`}
-            className="rounded-xl border border-gray-200 p-6 space-y-3 hover:border-primary/40 hover:shadow-sm transition-all block"
+            className={`rounded-xl border p-6 space-y-3 hover:border-primary/40 hover:shadow-sm transition-all block ${
+              course.status === 'GENERATING'
+                ? 'border-blue-300 ring-2 ring-blue-300 animate-pulse'
+                : 'border-gray-200'
+            }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -44,7 +50,10 @@ export default async function MyCoursesPage() {
               <p className="text-xs text-gray-400">
                 Created {new Date(course.createdAt).toLocaleDateString()}
               </p>
-              <DeleteCourseButton courseId={course.id} />
+              <div className="flex items-center gap-3">
+                {course.status === 'FAILED' && <RetryGenerationButton courseId={course.id} />}
+                <DeleteCourseButton courseId={course.id} />
+              </div>
             </div>
           </Link>
         ))}

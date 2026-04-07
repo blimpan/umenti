@@ -50,3 +50,10 @@ Before generating a full course, the teacher can trigger an AI review of the pro
 
 - **Course draft and publish workflow**
 Generated courses start in "Draft" status. The teacher reviews and iterates on theory and exercises module by module before publishing. Individual elements can be commented on and sent back to the AI for revision.
+
+- **Metacognition practice** 
+Awareness of one's own comprehension is one of the strongest predictors of learning outcomes, but almost nothing in mainstream education develops it deliberately. Students routinely think they understand something until they're tested.
+We should figure out a way to develop this skill amongst students throughout their interactions with courses.
+
+- **Assessment is still mostly summative, not diagnostic.**
+Tests tell you what a student got wrong, not why they got it wrong or what misconception is underneath. A student who can't solve a quadratic might be missing algebra, or arithmetic, or just misread the question. Teachers rarely have the time or tools to find out.

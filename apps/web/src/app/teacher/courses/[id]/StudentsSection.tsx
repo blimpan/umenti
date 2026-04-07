@@ -1,15 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { CourseEnrollment } from '@metis/types'
+import { apiFetch } from '@/lib/api'
 
 const API = process.env.NEXT_PUBLIC_API_URL
-
-async function getToken() {
-  const { data: { session } } = await createClient().auth.getSession()
-  return session!.access_token
-}
 
 interface Props {
   courseId: number
@@ -20,15 +15,12 @@ export default function StudentsSection({ courseId }: Props) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [withdrawingId, setWithdrawingId] = useState<number | null>(null)
 
   useEffect(() => {
-    getToken().then(token =>
-      fetch(`${API}/api/courses/${courseId}/enrollments`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(r => r.json())
-        .then(setEnrollments)
-    )
+    apiFetch(`${API}/api/courses/${courseId}/enrollments`)
+      .then(r => r.json())
+      .then(setEnrollments)
   }, [courseId])
 
   async function handleInvite(e: React.FormEvent) {
@@ -37,13 +29,9 @@ export default function StudentsSection({ courseId }: Props) {
 
     setLoading(true)
     try {
-      const authToken = await getToken()
-      const res = await fetch(`${API}/api/courses/${courseId}/enrollments`, {
+      const res = await apiFetch(`${API}/api/courses/${courseId}/enrollments`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       })
 
@@ -59,6 +47,20 @@ export default function StudentsSection({ courseId }: Props) {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleWithdraw(enrollmentId: number) {
+    setWithdrawingId(enrollmentId)
+    try {
+      const res = await apiFetch(`${API}/api/enrollments/${enrollmentId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        setEnrollments(prev => prev.filter(e => e.id !== enrollmentId))
+      }
+    } finally {
+      setWithdrawingId(null)
     }
   }
 
@@ -87,7 +89,16 @@ export default function StudentsSection({ courseId }: Props) {
           {pending.map(e => (
             <div key={e.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200">
               <span className="text-sm text-gray-500">{e.email}</span>
-              <span className="text-xs bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full">Pending</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded-full">Pending</span>
+                <button
+                  onClick={() => handleWithdraw(e.id)}
+                  disabled={withdrawingId === e.id}
+                  className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-50 transition-colors"
+                >
+                  {withdrawingId === e.id ? 'Withdrawing…' : 'Withdraw'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

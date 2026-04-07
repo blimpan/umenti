@@ -38,6 +38,7 @@ enum EnrollmentStatus {
 enum ExerciseType {
   MULTIPLE_CHOICE
   FREE_TEXT
+  INTERACTIVE
 }
 
 enum MaterialType {
@@ -45,26 +46,68 @@ enum MaterialType {
   LINK
 }
 
-model User {
-  supabaseId String   @id
-  email      String   @unique
-  role       Role
-  createdAt  DateTime @default(now())
+enum ExerciseSource {
+  TEACHER_PROVIDED
+  AI_PROVIDED
+}
 
-  courses     Course[]
-  enrollments Enrollment[]
+enum AttemptPhase {
+  PRIOR_KNOWLEDGE
+  MAIN
+}
+
+enum MessageRole {
+  AI
+  STUDENT
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  THEORY_BLOCK
+  EXERCISE_CARD
+  PRIOR_KNOWLEDGE_QUESTION
+  SYSTEM_MESSAGE
+  CONCEPT_MASTERY_REACHED
+  MODULE_END_REACHED
+}
+
+model User {
+  supabaseId     String          @id
+  email          String          @unique
+  role           Role
+  createdAt      DateTime        @default(now())
+
+  teacherProfile TeacherProfile?
+  studentProfile StudentProfile?
+}
+
+model TeacherProfile {
+  userId  String  @id
+  user    User    @relation(fields: [userId], references: [supabaseId], onDelete: Cascade)
+
+  courses Course[]
+}
+
+model StudentProfile {
+  userId  String  @id
+  user    User    @relation(fields: [userId], references: [supabaseId], onDelete: Cascade)
+
+  enrollments     Enrollment[]
+  conceptProgress StudentConceptProgress[]
+  moduleSessions  ModuleSession[]
 }
 
 model Course {
-  id             Int          @id @default(autoincrement())
-  teacher        User         @relation(fields: [teacherId], references: [supabaseId])
+  id             Int            @id @default(autoincrement())
+  teacher        TeacherProfile @relation(fields: [teacherId], references: [userId])
   teacherId      String
   name           String
   subject        String
   language       String
   targetAudience String
-  status         CourseStatus @default(GENERATING)
-  createdAt      DateTime     @default(now())
+  status         CourseStatus   @default(GENERATING)
+  createdAt      DateTime       @default(now())
 
   courseModules CourseModule[]
   concepts      Concept[]
@@ -77,12 +120,14 @@ model Enrollment {
   course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId  Int
   email     String
-  user      User?            @relation(fields: [userId], references: [supabaseId])
+  student   StudentProfile?  @relation(fields: [userId], references: [userId])
   userId    String?
   status    EnrollmentStatus @default(PENDING)
   createdAt DateTime         @default(now())
 
   @@unique([courseId, email])
+  @@index([userId])
+  @@index([email])
 }
 
 model CourseModule {
@@ -96,11 +141,14 @@ model CourseModule {
   leadsInto     String?
   reviewStatus  ReviewStatus @default(UNREVIEWED)
 
-  objectives     LearningObjective[]
-  outcomes       LearningOutcome[]
-  exercises      Exercise[]
-  conceptLinks   ModuleConcept[]
-  materialLinks  CourseMaterialModule[]
+  objectives    LearningObjective[]
+  outcomes      LearningOutcome[]
+  exercises     Exercise[]
+  conceptLinks  ModuleConcept[]
+  materialLinks CourseMaterialModule[]
+  sessions      ModuleSession[]
+
+  @@index([courseId])
 }
 
 model LearningObjective {
@@ -110,6 +158,8 @@ model LearningObjective {
   text           String
 
   outcomeLinks OutcomeObjective[]
+
+  @@index([courseModuleId])
 }
 
 model LearningOutcome {
@@ -120,27 +170,35 @@ model LearningOutcome {
 
   objectiveLinks OutcomeObjective[]
   conceptLinks   ConceptOutcome[]
+
+  @@index([courseModuleId])
 }
 
 model OutcomeObjective {
-  outcome         LearningOutcome   @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
-  outcomeId       Int
-  objective       LearningObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
-  objectiveId     Int
+  outcome     LearningOutcome   @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  outcomeId   Int
+  objective   LearningObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  objectiveId Int
 
   @@id([outcomeId, objectiveId])
 }
 
 model Concept {
-  id       Int    @id @default(autoincrement())
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  courseId Int
-  name     String
+  id            Int     @id @default(autoincrement())
+  course        Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId      Int
+  name          String
+  visualization String?    // optional LLM-generated HTML; one per concept
+  conceptType   String?
 
-  outcomeLinks  ConceptOutcome[]
-  moduleLinks   ModuleConcept[]
-  theoryBlocks  TheoryBlock[]
-  exerciseLinks ExerciseConcept[]
+  outcomeLinks    ConceptOutcome[]
+  moduleLinks     ModuleConcept[]
+  theoryBlocks    TheoryBlock[]
+  exerciseLinks   ExerciseConcept[]
+  progressEntries StudentConceptProgress[]
+  visualizations  ConceptVisualization[]
+
+  @@index([courseId])
 }
 
 model ConceptOutcome {
@@ -169,23 +227,44 @@ model TheoryBlock {
   content         String
   order           Int
   pendingRevision Boolean @default(false)
+
+  @@index([conceptId])
+}
+
+model ConceptVisualization {
+  id                  Int     @id @default(autoincrement())
+  concept             Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  conceptId           Int
+  order               Int
+  visualizationType   String
+  visualizationParams Json
+  visualization       String? // custom HTML fallback when templateId = 'custom'
+
+  @@index([conceptId])
 }
 
 model Exercise {
-  id              Int          @id @default(autoincrement())
-  courseModule    CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
-  courseModuleId  Int
-  type            ExerciseType
-  question        String
-  order           Int
-  pendingRevision Boolean      @default(false)
-  options         Json?        // MULTIPLE_CHOICE: array of 4 strings
-  correctIndex    Int?         // MULTIPLE_CHOICE: 0–3
-  explanation     String?      // MULTIPLE_CHOICE: shown after answering
-  sampleAnswer    String?      // FREE_TEXT: reference answer for grading LLM
-  rubric          String?      // FREE_TEXT: grading criteria
+  id                  Int          @id @default(autoincrement())
+  courseModule        CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  courseModuleId      Int
+  type                ExerciseType
+  question            String
+  order               Int
+  pendingRevision     Boolean      @default(false)
+  options             Json?
+  correctIndex        Int?
+  explanation         String?
+  sampleAnswer        String?
+  rubric              String?
+  visualizationHtml   String?      // used when type = INTERACTIVE
+  targetState         Json?        // server-only; never sent to client
+  visualizationType   String?
+  visualizationParams Json?
 
+  source       ExerciseSource    @default(TEACHER_PROVIDED)
   conceptLinks ExerciseConcept[]
+
+  @@index([courseModuleId])
 }
 
 model ExerciseConcept {
@@ -197,15 +276,26 @@ model ExerciseConcept {
   @@id([exerciseId, conceptId])
 }
 
+model StudentConceptProgress {
+  student        StudentProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  userId         String
+  concept        Concept        @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  conceptId      Int
+  score          Float
+  lastActivityAt DateTime       @updatedAt
+
+  @@id([userId, conceptId])
+}
+
 model CourseMaterial {
   id         Int          @id @default(autoincrement())
   course     Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId   Int
   type       MaterialType
-  filename   String?      // FILE only
-  storageKey String?      // FILE only
-  title      String?      // LINK only
-  url        String?      // LINK only
+  filename   String?
+  storageKey String?
+  title      String?
+  url        String?
 
   moduleLinks CourseMaterialModule[]
 }
@@ -217,4 +307,49 @@ model CourseMaterialModule {
   moduleId   Int
 
   @@id([materialId, moduleId])
+}
+
+model ModuleSession {
+  id        String         @id @default(uuid())
+  userId    String
+  student   StudentProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  moduleId  Int
+  module    CourseModule   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  messages  ChatMessage[]
+
+  @@unique([userId, moduleId])
+}
+
+model ExerciseAttempt {
+  id          Int          @id @default(autoincrement())
+  userId      String
+  exerciseId  Int
+  sessionId   String
+  conceptId   Int
+  moduleId    Int
+  courseId    Int
+  phase       AttemptPhase
+  isCorrect   Boolean
+  scoreChange Float
+  createdAt   DateTime     @default(now())
+
+  @@index([userId, courseId])
+  @@index([courseId, conceptId])
+  @@index([courseId, createdAt])
+}
+
+model ChatMessage {
+  id        String        @id @default(uuid())
+  sessionId String
+  session   ModuleSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  type      MessageType
+  payload   Json
+  order     Int
+  createdAt DateTime      @default(now())
+
+  @@index([sessionId])
 }

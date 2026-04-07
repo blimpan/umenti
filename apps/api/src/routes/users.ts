@@ -1,9 +1,10 @@
 import { Router } from 'express'
-import { PrismaClient, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import prisma from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
+import { logger } from '../lib/logger'
 import { User, Role } from '@metis/types'
 const router = Router()
-const prisma = new PrismaClient()
 
 // POST /api/users — called once after signup to create the user record
 router.post('/', requireAuth, async (req, res) => {
@@ -19,7 +20,11 @@ router.post('/', requireAuth, async (req, res) => {
       data: {
         supabaseId: id,
         email,
-        role
+        role,
+        ...(role === Role.TEACHER
+          ? { teacherProfile: { create: {} } }
+          : { studentProfile: { create: {} } }
+        ),
       }
     })
 
@@ -29,7 +34,7 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(409).json({ error: 'User already exists' })
     }
 
-    console.error('Error creating user:', error)
+    logger.error({ err: error }, 'Error creating user')
     return res.status(500).json({ error: 'Failed to create user' })
   }
 })
