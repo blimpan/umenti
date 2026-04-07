@@ -375,6 +375,8 @@ model CurriculumTemplateModule {
   order      Int
   objectives TemplateObjective[]
   outcomes   TemplateOutcome[]
+
+  @@index([templateId])
 }
 
 model TemplateObjective {
@@ -382,6 +384,8 @@ model TemplateObjective {
   moduleId Int
   module   CurriculumTemplateModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   text     String
+
+  @@index([moduleId])
 }
 
 model TemplateOutcome {
@@ -389,4 +393,6 @@ model TemplateOutcome {
   moduleId Int
   module   CurriculumTemplateModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   text     String
+
+  @@index([moduleId])
 }
