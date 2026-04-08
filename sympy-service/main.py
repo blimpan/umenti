@@ -1,5 +1,7 @@
 # sympy-service/main.py
 import re
+import time
+import logging
 import sympy
 import concurrent.futures
 from sympy import oo, S, Interval, Symbol
@@ -8,6 +10,13 @@ from sympy.parsing.sympy_parser import parse_expr
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [sympy] %(levelname)-5s %(message)s',
+    datefmt='%H:%M:%S',
+)
+log = logging.getLogger('sympy-service')
 
 app = FastAPI()
 
@@ -90,10 +99,13 @@ def _parse_sympy_str(expr_str: str):
 
 @app.post('/normalize', response_model=NormalizeResponse)
 def normalize(req: NormalizeRequest):
+    t0 = time.perf_counter()
     try:
         result = latex_to_sympy_str(req.latex)
+        log.info('normalize  latex=%r  →  %r  (%.1fms)', req.latex, result, (time.perf_counter() - t0) * 1000)
         return NormalizeResponse(sympyExpr=result)
     except Exception as exc:
+        log.error('normalize  latex=%r  error=%s  (%.1fms)', req.latex, exc, (time.perf_counter() - t0) * 1000)
         raise HTTPException(status_code=422, detail=str(exc))
 
 def _simplify_diff(a, b):
@@ -103,23 +115,30 @@ def _simplify_diff(a, b):
 
 @app.post('/check-equivalence', response_model=EquivalenceResponse)
 def check_equivalence(req: EquivalenceRequest):
+    t0 = time.perf_counter()
     try:
         a = _parse_sympy_str(req.exprA)
         b = _parse_sympy_str(req.exprB)
         if isinstance(a, sympy.Set) and isinstance(b, sympy.Set):
-            return EquivalenceResponse(equivalent=bool(a == b))
+            equivalent = bool(a == b)
+            log.info('equivalence  %r == %r  →  %s  set-compare  (%.1fms)', req.exprA, req.exprB, equivalent, (time.perf_counter() - t0) * 1000)
+            return EquivalenceResponse(equivalent=equivalent)
         with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
             future = executor.submit(_simplify_diff, a, b)
             try:
                 equivalent = future.result(timeout=5)
+                log.info('equivalence  %r == %r  →  %s  simplify  (%.1fms)', req.exprA, req.exprB, equivalent, (time.perf_counter() - t0) * 1000)
                 return EquivalenceResponse(equivalent=bool(equivalent))
             except concurrent.futures.TimeoutError:
+                log.warning('equivalence  %r == %r  →  timeout  (%.1fms)', req.exprA, req.exprB, (time.perf_counter() - t0) * 1000)
                 return EquivalenceResponse(equivalent=False, error="simplify timed out")
     except Exception as exc:
+        log.error('equivalence  %r == %r  error=%s  (%.1fms)', req.exprA, req.exprB, exc, (time.perf_counter() - t0) * 1000)
         return EquivalenceResponse(equivalent=False, error=str(exc))
 
 @app.post('/evaluate-at-points', response_model=EquivalenceResponse)
 def evaluate_at_points(req: EvaluateAtPointsRequest):
+    t0 = time.perf_counter()
     try:
         a = _parse_sympy_str(req.exprA)
         b = _parse_sympy_str(req.exprB)
@@ -128,7 +147,10 @@ def evaluate_at_points(req: EvaluateAtPointsRequest):
             va = complex(a.subs(x, pt))
             vb = complex(b.subs(x, pt))
             if abs(va - vb) > 1e-9:
+                log.info('evaluate-at-points  %r != %r  diverged at x=%s  (%.1fms)', req.exprA, req.exprB, pt, (time.perf_counter() - t0) * 1000)
                 return EquivalenceResponse(equivalent=False)
+        log.info('evaluate-at-points  %r == %r  →  True  (%.1fms)', req.exprA, req.exprB, (time.perf_counter() - t0) * 1000)
         return EquivalenceResponse(equivalent=True)
     except Exception as exc:
+        log.error('evaluate-at-points  %r == %r  error=%s  (%.1fms)', req.exprA, req.exprB, exc, (time.perf_counter() - t0) * 1000)
         return EquivalenceResponse(equivalent=False, error=str(exc))

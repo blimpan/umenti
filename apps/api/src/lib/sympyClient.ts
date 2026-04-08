@@ -1,4 +1,5 @@
 // apps/api/src/lib/sympyClient.ts
+import { logger } from './logger'
 
 const SYMPY_SERVICE_URL = (process.env.SYMPY_SERVICE_URL ?? 'http://localhost:8000').replace(/\/$/, '')
 const TIMEOUT_MS = 3_000
@@ -16,11 +17,17 @@ export async function normalizeLatex(latex: string): Promise<NormalizeResult> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as Record<string, unknown>
-      return { error: (body.detail as string) ?? `HTTP ${res.status}` }
+      const error = (body.detail as string) ?? `HTTP ${res.status}`
+      logger.warn({ latex, error }, '[sympy] normalize failed')
+      return { error }
     }
-    return res.json() as Promise<{ sympyExpr: string }>
+    const result = await res.json() as { sympyExpr: string }
+    logger.info({ latex, sympyExpr: result.sympyExpr }, '[sympy] normalize')
+    return result
   } catch (err: unknown) {
-    return { error: (err instanceof Error ? err.message : String(err)) }
+    const error = err instanceof Error ? err.message : String(err)
+    logger.error({ latex, error }, '[sympy] normalize unreachable')
+    return { error }
   }
 }
 
@@ -32,10 +39,17 @@ export async function checkEquivalence(exprA: string, exprB: string): Promise<Eq
       body:    JSON.stringify({ exprA, exprB }),
       signal:  AbortSignal.timeout(TIMEOUT_MS),
     })
-    if (!res.ok) return { equivalent: false, error: `HTTP ${res.status}` }
-    return res.json() as Promise<EquivalenceResult>
+    if (!res.ok) {
+      logger.warn({ exprA, exprB, status: res.status }, '[sympy] check-equivalence failed')
+      return { equivalent: false, error: `HTTP ${res.status}` }
+    }
+    const result = await res.json() as EquivalenceResult
+    logger.info({ exprA, exprB, equivalent: result.equivalent, error: result.error }, '[sympy] check-equivalence')
+    return result
   } catch (err: unknown) {
-    return { equivalent: false, error: (err instanceof Error ? err.message : String(err)) }
+    const error = err instanceof Error ? err.message : String(err)
+    logger.error({ exprA, exprB, error }, '[sympy] check-equivalence unreachable')
+    return { equivalent: false, error }
   }
 }
 
@@ -47,9 +61,16 @@ export async function evaluateAtPoints(exprA: string, exprB: string, points: num
       body:    JSON.stringify({ exprA, exprB, points }),
       signal:  AbortSignal.timeout(TIMEOUT_MS),
     })
-    if (!res.ok) return { equivalent: false, error: `HTTP ${res.status}` }
-    return res.json() as Promise<EquivalenceResult>
+    if (!res.ok) {
+      logger.warn({ exprA, exprB, status: res.status }, '[sympy] evaluate-at-points failed')
+      return { equivalent: false, error: `HTTP ${res.status}` }
+    }
+    const result = await res.json() as EquivalenceResult
+    logger.info({ exprA, exprB, equivalent: result.equivalent, error: result.error }, '[sympy] evaluate-at-points')
+    return result
   } catch (err: unknown) {
-    return { equivalent: false, error: (err instanceof Error ? err.message : String(err)) }
+    const error = err instanceof Error ? err.message : String(err)
+    logger.error({ exprA, exprB, error }, '[sympy] evaluate-at-points unreachable')
+    return { equivalent: false, error }
   }
 }

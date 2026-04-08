@@ -25,6 +25,10 @@ tmux send-keys -t $SESSION:2 "tail -F $ROOT/apps/api/logs/llm.log | $PINO_PRETTY
 tmux new-window -t $SESSION -n "prisma"
 tmux send-keys -t $SESSION:3 "tail -F $ROOT/apps/api/logs/prisma.log | $PINO_PRETTY" Enter
 
+# Window 4: SymPy microservice — deterministic math grading
+tmux new-window -t $SESSION -n "sympy"
+tmux send-keys -t $SESSION:4 "cd $ROOT/sympy-service && uvicorn main:app --port 8000 --log-level warning" Enter
+
 # Mouse support — scroll with mouse wheel at any time
 tmux set-option -t $SESSION mouse on
 
