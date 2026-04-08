@@ -4,6 +4,7 @@ import prisma from '../lib/prisma'
 import { getModel } from '../lib/llm'
 import { llmLogger } from '../lib/logger'
 import { validateMathSyntax, MathValidationError, MATH_SYNTAX_CONTRACT } from '../lib/mathValidation'
+import { extractCanonicalExpressions } from '../lib/mathCreation'
 
 const TEMPLATE_CATALOG = `
 CONCEPT CLASSIFICATION
@@ -582,6 +583,18 @@ async function writeModuleExercises(
     await prisma.exerciseConcept.createMany({
       data: conceptIds.map(conceptId => ({ exerciseId: exercise.id, conceptId })),
     })
+
+    // Creation agent: extract and store canonical expressions for FREE_TEXT exercises.
+    // Runs after the exercise row exists so a failure here never blocks persistence.
+    if (exerciseType === 'FREE_TEXT' && ex.sampleAnswer) {
+      const canonicalExpressions = await extractCanonicalExpressions(ex.question, ex.sampleAnswer)
+      if (canonicalExpressions.length > 0) {
+        await prisma.exercise.update({
+          where: { id: exercise.id },
+          data:  { canonicalExpressions },
+        })
+      }
+    }
   }
 }
 
