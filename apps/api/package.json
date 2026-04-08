@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "prisma": {
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "ts-node-dev --transpile-only --no-deps prisma/seed.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
