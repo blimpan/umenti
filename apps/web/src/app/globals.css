@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "katex/dist/katex.min.css";
 
 :root {
   color-scheme: light; /* force light mode — dark mode is a future feature */
