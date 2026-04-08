@@ -11,6 +11,7 @@ import { MathInputModal } from './MathInputModal'
 import { PlusMenu } from './PlusMenu'
 import { uploadImage } from '@/lib/uploadImage'
 import { richContentToText } from '@/lib/richContent'
+import { tokenizeMathText } from '@/lib/mathPaste'
 import { createClient } from '@/lib/supabase/client'
 
 /** Recursively collect all attachment nodes from a TipTap document tree. */
@@ -55,6 +56,8 @@ export function RichInput({
   // Stable ref to openMathModal — onEditMath is captured at editor init time,
   // same stale-closure problem as handleKeyDown above.
   const openMathModalRef = useRef<(initialLatex?: string, customOnInsert?: (latex: string) => void) => void>(() => {})
+  // Stable ref to handleMathPaste — handlePaste in editorProps is captured at editor init time.
+  const handlePasteRef = useRef<(text: string) => void>(() => {})
 
   const editor = useEditor({
     extensions: [
@@ -81,6 +84,19 @@ export function RichInput({
         }
         return false
       },
+      handlePaste(_view, event, slice) {
+        // If the clipboard already contains TipTap math nodes (copied from RichInput itself),
+        // let ProseMirror handle the paste natively — no transformation needed.
+        let hasMathNodes = false
+        slice.content.descendants(node => { if (node.type.name === 'math') hasMathNodes = true })
+        if (hasMathNodes) return false
+
+        const text = event.clipboardData?.getData('text/plain') ?? ''
+        if (!text.includes('$')) return false
+
+        handlePasteRef.current(text)
+        return true
+      },
     },
     editable: !disabled,
     immediatelyRender: false,
@@ -94,6 +110,21 @@ export function RichInput({
       isEditing: !!customOnInsert,
       onInsert: customOnInsert ?? insertMathAtSavedPosition,
     })
+  }
+
+  function handleMathPaste(text: string) {
+    if (!editor) return
+    const tokens = tokenizeMathText(text)
+    if (!tokens.some(t => t.type === 'math')) return
+    editor.chain().focus().insertContent(
+      tokens
+        .filter(t => !(t.type === 'text' && t.value === ''))
+        .map(token =>
+          token.type === 'math'
+            ? { type: 'math', attrs: { latex: token.latex } }
+            : { type: 'text', text: token.value }
+        )
+    ).run()
   }
 
   const insertMathAtSavedPosition = useCallback((latex: string) => {
@@ -151,6 +182,7 @@ export function RichInput({
   // Keep refs in sync with latest closures on every render
   handleSubmitRef.current = handleSubmit
   openMathModalRef.current = openMathModal
+  handlePasteRef.current = handleMathPaste
 
   // useEditorState subscribes to editor transactions — required in TipTap v3
   // because editor state is no longer automatically reactive.
