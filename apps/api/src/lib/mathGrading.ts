@@ -2,7 +2,7 @@
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 import { getModel } from './llm'
-import { llmLogger } from './logger'
+import { logger, llmLogger } from './logger'
 import { normalizeLatex, checkEquivalence, evaluateAtPoints } from './sympyClient'
 import type { CanonicalExpression } from '@metis/types'
 
@@ -175,6 +175,7 @@ export async function gradeMathExercise(
   const scoreChange = correct ? 20 : almost ? 0 : -10
 
   llmLogger.info({ passCount, totalCount, correct, almost, scoreChange }, '[math-grading] result')
+  logger.info({ passCount, totalCount, claimResults }, '[math-grading] claims')
 
   return { correct, almost, scoreChange, claimResults }
 }

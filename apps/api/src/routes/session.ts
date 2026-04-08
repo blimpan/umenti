@@ -173,9 +173,15 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const hasMore  = raw.length > limit
     const messages = raw.slice(0, limit).reverse()   // back to ascending for the client
 
+    const hasActiveExercise = messages.some(
+      m => (m.type === 'EXERCISE_CARD' || m.type === 'PRIOR_KNOWLEDGE_QUESTION')
+        && !(m.payload as any)?.submitted
+    )
+
     const result: GetSessionResponse = {
       session:  { id: session.id, createdAt: session.createdAt.toISOString() },
       hasMore,
+      hasActiveExercise,
       messages: messages.map(m => ({
         id: m.id,
         sessionId: m.sessionId,
@@ -446,6 +452,8 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
     let correct: boolean
     let savedGrading: { scoreChange: number; correct: boolean; almost: boolean } | null = null
 
+    logger.info({ exerciseId, type: exercise.type, phase: isPhase1 ? 'PRIOR_KNOWLEDGE' : 'MAIN' }, '[submit] received')
+
     if (exercise.type === 'MULTIPLE_CHOICE') {
       const selectedIndex = typeof answer === 'number' ? answer : parseInt(String(answer))
       correct = selectedIndex === exercise.correctIndex
@@ -475,19 +483,24 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
         ) ? raw : null
 
       if (canonical && canonical.length > 0) {
-        // Deterministic math grading; fall back to LLM grader if it returns null
-        savedGrading = await gradeMathExercise(
+        logger.info({ exerciseId, claims: canonical.map(c => c.label) }, '[submit] grading:math')
+        const mathResult = await gradeMathExercise(
           exercise.question,
           canonical,
           exercise.rubric ?? '',
           String(answer),
-        ) ?? await gradeFreeText(
+        )
+        if (!mathResult) {
+          logger.warn({ exerciseId }, '[submit] grading:math failed — falling back to free-text')
+        }
+        savedGrading = mathResult ?? await gradeFreeText(
           exercise.question,
           exercise.sampleAnswer ?? '',
           exercise.rubric ?? '',
           String(answer),
         )
       } else {
+        logger.info({ exerciseId }, '[submit] grading:free-text')
         savedGrading = await gradeFreeText(
           exercise.question,
           exercise.sampleAnswer ?? '',
@@ -504,6 +517,7 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
         return
       }
       correct = savedGrading.correct
+      logger.info({ exerciseId, correct, almost: savedGrading.almost, scoreChange: savedGrading.scoreChange }, '[submit] graded')
     }
 
     // Compute scoreChange and feedback now so we can open SSE immediately.
@@ -561,16 +575,24 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
     if (isPhase1) {
       // Phase 1: set score to 50 if correct and currently < 50. Never additive.
       if (correct) {
-        await Promise.all(conceptIds.map(async conceptId => {
-          const existing = await prisma.studentConceptProgress.findFirst({ where: { userId: req.user!.id, conceptId } })
-          if (!existing || existing.score < 50) {
-            await prisma.studentConceptProgress.upsert({
-              where:  { userId_conceptId: { userId: req.user!.id, conceptId } },
-              update: { score: 50 },
-              create: { userId: req.user!.id, conceptId, score: 50 },
-            })
-          }
-        }))
+        // Batch fetch all existing progress rows in one query instead of one per concept.
+        const existingRows = await prisma.studentConceptProgress.findMany({
+          where: { userId: req.user!.id, conceptId: { in: conceptIds } },
+          select: { conceptId: true, score: true },
+        })
+        const existingMap = new Map(existingRows.map(r => [r.conceptId, r.score]))
+
+        await Promise.all(conceptIds
+          .filter(conceptId => {
+            const score = existingMap.get(conceptId)
+            return score === undefined || score < 50
+          })
+          .map(conceptId => prisma.studentConceptProgress.upsert({
+            where:  { userId_conceptId: { userId: req.user!.id, conceptId } },
+            update: { score: 50 },
+            create: { userId: req.user!.id, conceptId, score: 50 },
+          }))
+        )
       }
       primaryEffective = 0 // Phase 1 never triggers mastery events
     } else {

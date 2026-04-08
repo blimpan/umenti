@@ -3,7 +3,7 @@ import { gradeMathExercise } from './mathGrading'
 import type { CanonicalExpression } from '@metis/types'
 
 vi.mock('./llm',    () => ({ getModel: vi.fn(() => 'mock-model') }))
-vi.mock('./logger', () => ({ llmLogger: { error: vi.fn(), info: vi.fn() } }))
+vi.mock('./logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() }, llmLogger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 
 vi.mock('ai', async (importOriginal) => {
   const actual = await importOriginal<typeof import('ai')>()
