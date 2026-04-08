@@ -468,7 +468,11 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
         }
       }
     } else {
-      const canonical = exercise.canonicalExpressions as CanonicalExpression[] | null
+      const raw = exercise.canonicalExpressions
+      const canonical: CanonicalExpression[] | null =
+        Array.isArray(raw) && raw.every((c): c is CanonicalExpression =>
+          typeof (c as any)?.label === 'string' && ('sympyExpr' in (c as any))
+        ) ? raw : null
 
       if (canonical && canonical.length > 0) {
         // Deterministic math grading; fall back to LLM grader if it returns null
