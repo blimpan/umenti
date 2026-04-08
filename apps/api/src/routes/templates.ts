@@ -1,19 +1,20 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma'
 import { logger } from '../lib/logger'
+import { requireAuth } from '../middleware/auth'
 import type { GetTemplatesMetaResponse, CurriculumTemplateFull } from '@metis/types'
 
 const router = Router()
 
 // GET /api/templates/meta — lightweight cascade data for dropdowns
-router.get('/meta', async (_req, res) => {
+router.get('/meta', requireAuth, async (_req, res) => {
   try {
     const templates = await prisma.curriculumTemplate.findMany({
       orderBy: [{ country: 'asc' }, { subject: 'asc' }, { name: 'asc' }],
       select: { id: true, country: true, subject: true, grade: true, name: true },
     })
     const meta = buildMetaResponse(templates)
-    res.setHeader('Cache-Control', 'public, max-age=3600')
+    res.setHeader('Cache-Control', 'private, max-age=3600')
     res.json(meta)
   } catch (err) {
     logger.error({ err }, '[GET /api/templates/meta]')
@@ -22,7 +23,7 @@ router.get('/meta', async (_req, res) => {
 })
 
 // GET /api/templates/:id — full template with modules, objectives, outcomes
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id as string)
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid template ID' }); return }
 
@@ -55,7 +56,7 @@ router.get('/:id', async (req, res) => {
       })),
     }
 
-    res.setHeader('Cache-Control', 'public, max-age=3600')
+    res.setHeader('Cache-Control', 'private, max-age=3600')
     res.json(response)
   } catch (err) {
     logger.error({ err }, '[GET /api/templates/:id]')
