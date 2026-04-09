@@ -112,7 +112,8 @@ model Course {
   courseModules CourseModule[]
   concepts      Concept[]
   materials     CourseMaterial[]
-  enrollments   Enrollment[]
+  enrollments      Enrollment[]
+  exerciseAnalyses ExerciseAnalysis[]
 }
 
 model Enrollment {
@@ -264,6 +265,7 @@ model Exercise {
 
   source       ExerciseSource    @default(TEACHER_PROVIDED)
   conceptLinks ExerciseConcept[]
+  analysis     ExerciseAnalysis?
 
   @@index([courseModuleId])
 }
@@ -335,6 +337,7 @@ model ExerciseAttempt {
   phase       AttemptPhase
   isCorrect   Boolean
   scoreChange Float
+  answer      String?
   createdAt   DateTime     @default(now())
 
   @@index([userId, courseId])
@@ -396,4 +399,19 @@ model TemplateOutcome {
   text     String
 
   @@index([moduleId])
+}
+
+model ExerciseAnalysis {
+  id                       Int      @id @default(autoincrement())
+  exerciseId               Int      @unique
+  courseId                 Int
+  summary                  String
+  commonMisconceptions     Json     // string[]
+  attemptCountAtGeneration Int
+  generatedAt              DateTime @default(now())
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
 }
