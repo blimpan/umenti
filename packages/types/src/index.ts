@@ -44,6 +44,7 @@ export type WizardSuggestContext = {
   targetAudience?: string
   moduleName?: string
   existingObjectives?: string[]
+  existingOutcomes?: string[]
   existingModuleNames?: string[]
 }
 
@@ -123,8 +124,9 @@ export type CourseExercise = {
   canonicalExpressions: CanonicalExpression[] | null  // null = not yet extracted
   // INTERACTIVE / legacy
   visualizationHtml: string | null
-  visualizationType: string | null            // new
-  visualizationParams: Record<string, unknown> | null  // new
+  visualizationType: string | null
+  visualizationParams: Record<string, unknown> | null
+  targetState: Record<string, number> | null   // interactive answer; null for non-interactive
 }
 
 export type CourseModule = {
@@ -195,7 +197,7 @@ export type GetEnrollmentsResponse = CourseEnrollment[]
 
 export type StudentCourseItem = {
   enrollmentId: number
-  enrollmentStatus: 'PENDING' | 'ACTIVE'
+  enrollmentStatus: 'ACTIVE'
   course: {
     id: number
     name: string
@@ -208,6 +210,17 @@ export type StudentCourseItem = {
 }
 
 export type GetStudentCoursesResponse = StudentCourseItem[]
+
+export type StudentInviteItem = {
+  enrollmentId: number
+  course: {
+    id: number
+    name: string
+    subject: string
+  }
+}
+
+export type GetStudentInvitesResponse = StudentInviteItem[]
 
 // --- Student progress ---
 
@@ -264,9 +277,10 @@ export type SseEvent =
   | { type: 'done' }
 
 export type GetSessionResponse = {
-  session:  { id: string; createdAt: string }
-  messages: ChatMessage[]
-  hasMore:  boolean
+  session:           { id: string; createdAt: string }
+  messages:          ChatMessage[]
+  hasMore:           boolean
+  hasActiveExercise: boolean
 }
 
 // --- Review (spaced repetition queue) ---

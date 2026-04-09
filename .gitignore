@@ -19,6 +19,11 @@ dist/
 # Dev logs
 apps/api/logs/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
 # Misc
 .DS_Store
 .worktrees/
