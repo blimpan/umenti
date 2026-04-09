@@ -6,6 +6,9 @@ import { RichInput, extractAttachments } from './RichInput'
 vi.mock('@tiptap/react', () => ({
   useEditor: vi.fn(() => null),
   EditorContent: () => <div data-testid="editor-content" />,
+  useEditorState: vi.fn(({ editor: e, selector }: { editor: any; selector: (arg: { editor: any }) => any }) =>
+    selector({ editor: e })
+  ),
 }))
 vi.mock('./extensions/MathNode', () => ({ MathNode: { configure: vi.fn(() => ({})) } }))
 vi.mock('./extensions/ImageNode', () => ({ ImageNode: {} }))
@@ -35,10 +38,12 @@ vi.mock('@/lib/supabase/client', () => ({
 
 import { useEditor } from '@tiptap/react'
 
+const helloDoc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }] }
+
 const mockEditor = {
-  getJSON: vi.fn(() => ({ type: 'doc', content: [] })),
+  getJSON: vi.fn(() => helloDoc),
   getText: vi.fn(() => 'hello'),
-  state: { selection: { anchor: 0 }, doc: { content: { size: 0 } } },
+  state: { selection: { anchor: 0 }, doc: { content: { size: 0 }, descendants: vi.fn() } },
   chain: vi.fn(() => ({
     focus: vi.fn(() => ({
       setTextSelection: vi.fn(() => ({
@@ -112,7 +117,7 @@ describe('RichInput', () => {
     fireEvent.click(sendBtn)
 
     expect(onSubmit).toHaveBeenCalledWith({
-      richContent: { type: 'doc', content: [] },
+      richContent: helloDoc,
       plainText: 'hello',
       attachments: [],
     })
@@ -123,6 +128,7 @@ describe('RichInput', () => {
     vi.mocked(useEditor).mockReturnValue({
       ...mockEditor,
       getText: vi.fn(() => '   '),
+      getJSON: vi.fn(() => ({ type: 'doc', content: [] })),
     } as any)
     const onSubmit = vi.fn()
     render(<RichInput onSubmit={onSubmit} />)

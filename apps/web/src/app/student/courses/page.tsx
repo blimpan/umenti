@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Sidebar from '@/components/Sidebar'
-import { GetStudentCoursesResponse } from '@metis/types'
+import { GetStudentCoursesResponse, GetStudentInvitesResponse } from '@metis/types'
 import { timedFetch } from '@/lib/timed-fetch'
 
 export default async function MyCoursesPage() {
@@ -12,15 +12,19 @@ export default async function MyCoursesPage() {
   if (!session) redirect('/login')
   if (session.user.user_metadata?.role !== 'STUDENT') redirect('/teacher/dashboard')
 
-  const res = await timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/courses`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-    cache: 'no-store',
-  })
+  const [coursesRes, invitesRes] = await Promise.all([
+    timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/courses`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: 'no-store',
+    }),
+    timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/invites`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: 'no-store',
+    }),
+  ])
 
-  const courses: GetStudentCoursesResponse = res.ok ? await res.json() : []
-
-  const active = courses.filter(c => c.enrollmentStatus === 'ACTIVE')
-  const pending = courses.filter(c => c.enrollmentStatus === 'PENDING')
+  const active: GetStudentCoursesResponse = coursesRes.ok ? await coursesRes.json() : []
+  const pending: GetStudentInvitesResponse = invitesRes.ok ? await invitesRes.json() : []
 
   return (
     <div className="flex min-h-screen">

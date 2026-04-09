@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/lib/api'
-import { StudentCourseItem } from '@metis/types'
+import { StudentInviteItem } from '@metis/types'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 
 interface Props {
-  item: StudentCourseItem
+  item: StudentInviteItem
 }
 
 export default function CourseInviteCard({ item }: Props) {

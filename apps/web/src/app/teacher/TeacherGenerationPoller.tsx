@@ -1,31 +1,58 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import type { GetCoursesResponse, CourseStatus } from '@metis/types'
 
-const POLL_INTERVAL_MS = 3_000
+const POLL_INTERVAL_MS = 10_000
 const TOAST_DURATION_MS = 7_000
 
-export function TeacherGenerationPoller() {
+// ─── Context ─────────────────────────────────────────────────────────────────
+
+const GenerationPollerContext = createContext<{ wakePoller: () => void }>({
+  wakePoller: () => {},
+})
+
+export function useGenerationPoller() {
+  return useContext(GenerationPollerContext)
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
+export function GenerationPollerProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
 
   // Keep pathname current inside the interval closure without restarting the effect.
-  // If pathname were in the useEffect dep array, the interval would restart on every
-  // navigation, resetting knownStatuses and potentially re-firing toasts.
   const pathnameRef = useRef(pathname)
   useEffect(() => {
     pathnameRef.current = pathname
   }, [pathname])
 
   // Tracks last-known status for every course seen this session.
-  // A ref rather than state because updates should not cause re-renders.
   const knownStatuses = useRef<Map<number, CourseStatus>>(new Map())
 
+  // Holds a reference to startPolling so wakePoller (context value) can call it
+  // from outside the effect without capturing a stale closure.
+  const startPollingRef = useRef<(() => void) | null>(null)
+
+  // Stable context value — reads from startPollingRef so it never changes identity.
+  const wakePoller = useCallback(() => {
+    startPollingRef.current?.()
+  }, [])
+
   useEffect(() => {
+    const intervalId = { current: null as ReturnType<typeof setInterval> | null }
+
+    function stopPolling() {
+      if (intervalId.current !== null) {
+        clearInterval(intervalId.current)
+        intervalId.current = null
+      }
+    }
+
     async function tick() {
       let courses: GetCoursesResponse
       try {
@@ -67,29 +94,41 @@ export function TeacherGenerationPoller() {
       }
 
       // Only refresh the Server Component if a transition happened AND the teacher
-      // is on the courses list — avoids disrupting other pages mid-interaction
+      // is on the courses list — avoids disrupting other pages mid-interaction.
       if (anyTransition && pathnameRef.current === '/teacher/courses') {
         router.refresh()
       }
+
+      // Stop polling once nothing is generating — wakePoller() restarts it.
+      const anyGenerating = [...knownStatuses.current.values()].some(
+        (s) => s === 'GENERATING',
+      )
+      if (!anyGenerating) {
+        stopPolling()
+      }
     }
 
-    // Guard against a late-resolving fetch firing after cleanup
-    let stopped = false
-
-    async function runTick() {
-      if (stopped) return
-      await tick()
+    function startPolling() {
+      stopPolling() // prevent double-start if wakePoller called while already running
+      void tick()
+      intervalId.current = setInterval(() => void tick(), POLL_INTERVAL_MS)
     }
 
-    // Fire immediately on mount so we don't wait 3s for the first check
-    void runTick()
-    const intervalId = setInterval(runTick, POLL_INTERVAL_MS)
+    // Register so wakePoller() can call this from outside the effect.
+    startPollingRef.current = startPolling
+
+    // Fire immediately on mount — there may already be GENERATING courses.
+    startPolling()
 
     return () => {
-      stopped = true
-      clearInterval(intervalId)
+      stopPolling()
+      startPollingRef.current = null
     }
   }, [router]) // router is stable; no other deps — see pathnameRef above
 
-  return null
+  return (
+    <GenerationPollerContext.Provider value={{ wakePoller }}>
+      {children}
+    </GenerationPollerContext.Provider>
+  )
 }

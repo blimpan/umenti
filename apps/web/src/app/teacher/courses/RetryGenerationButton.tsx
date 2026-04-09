@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiFetch } from '@/lib/api'
+import { useGenerationPoller } from '@/app/teacher/TeacherGenerationPoller'
 
 export default function RetryGenerationButton({ courseId }: { courseId: number }) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const { wakePoller } = useGenerationPoller()
 
   async function handleRetry(e: React.MouseEvent) {
     e.preventDefault()
@@ -15,6 +17,7 @@ export default function RetryGenerationButton({ courseId }: { courseId: number }
     await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses/${courseId}/generate`, {
       method: 'POST',
     })
+    wakePoller()
     router.refresh()
   }
 

@@ -65,9 +65,9 @@ const SLIDER_CONFIG: Record<string, { key: string; label: string; min: number; m
 
 function initState(params: CartesianGraphParams): Record<string, number> {
   const { mode } = params
-  if (mode === 'linear')    return { slope: params.slope ?? 1, intercept: params.intercept ?? 0 }
-  if (mode === 'quadratic') return { a: params.a ?? 1, b: params.b ?? 0, c: params.c ?? 0 }
-  return { amplitude: params.amplitude ?? 1, frequency: params.frequency ?? 1, phase: params.phase ?? 0 }
+  if (mode === 'linear')    return { slope: 0, intercept: 0 }
+  if (mode === 'quadratic') return { a: 1, b: 0, c: 0 }
+  return { amplitude: 1, frequency: 1, phase: 0 }
 }
 
 // ---------------------------------------------------------------------------

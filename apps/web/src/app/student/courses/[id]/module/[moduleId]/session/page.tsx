@@ -19,7 +19,7 @@ export default async function SessionPage({ params }: Props) {
     `${process.env.NEXT_PUBLIC_API_URL}/api/student/courses/${courseId}/modules/${moduleId}`,
     {
       headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: 'no-store',
+      next: { revalidate: 300 },
     }
   )
 

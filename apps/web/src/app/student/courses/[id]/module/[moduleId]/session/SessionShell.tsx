@@ -670,14 +670,24 @@ export default function SessionShell({ courseId, courseName, currentModule, allM
 
       const data: GetSessionResponse = await res.json()
 
+      // Fire /advance immediately if the server already knows there's no active exercise —
+      // no need to wait for message parsing. This eliminates the GET → parse → POST waterfall.
+      if (!data.hasActiveExercise) {
+        setActiveExercise(null)
+        activeExerciseRef.current = null
+        callAdvance(true, true)
+      }
+
       // Unsubmitted-exercise detection searches across all 7 fetched messages (shown + buffered).
       // The active exercise is always among the most recent, so 7 is sufficient.
-      const unsubmitted = [...data.messages]
-        .reverse()
-        .find(m =>
-          (m.type === 'EXERCISE_CARD' || m.type === 'PRIOR_KNOWLEDGE_QUESTION')
-          && !(m.payload as any).submitted
-        )
+      const unsubmitted = data.hasActiveExercise
+        ? [...data.messages]
+            .reverse()
+            .find(m =>
+              (m.type === 'EXERCISE_CARD' || m.type === 'PRIOR_KNOWLEDGE_QUESTION')
+              && !(m.payload as any).submitted
+            )
+        : undefined
 
       // Split fetched messages: last 5 displayed, earlier 2 buffered for instant reveal on scroll-up.
       // Exception: if the unsubmitted exercise card lives in the buffer (not in the last 5), promote
@@ -699,10 +709,6 @@ export default function SessionShell({ courseId, courseName, currentModule, allM
         const id = (unsubmitted.payload as any).exerciseId
         setActiveExercise(id)
         activeExerciseRef.current = id
-      } else {
-        setActiveExercise(null)
-        activeExerciseRef.current = null
-        callAdvance(true, true)
       }
 
       isInitialLoadRef.current = false

@@ -45,11 +45,11 @@ export default function GeometricShapeExplorer({
 }: VisualizationTemplateProps<GeometricShapeParams, GeometricShapeState>) {
   const isExercise = !!onStateChange
   const { shape, showArea = true, showPerimeter = true } = params
-  const [width, setWidth]   = useState(params.width ?? 5)
-  const [height, setHeight] = useState(params.height ?? 3)
-  const [radius, setRadius] = useState(params.radius ?? 4)
-  const [base, setBase]     = useState(params.base ?? 6)
-  const [legH, setLegH]     = useState(params.legHeight ?? 4)
+  const [width, setWidth]   = useState(3)
+  const [height, setHeight] = useState(3)
+  const [radius, setRadius] = useState(3)
+  const [base, setBase]     = useState(3)
+  const [legH, setLegH]     = useState(3)
 
   const currentState: Record<string, number> =
     shape === 'rectangle'    ? { width: fmt2(width), height: fmt2(height) } :

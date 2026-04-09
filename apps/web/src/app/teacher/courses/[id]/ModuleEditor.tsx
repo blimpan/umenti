@@ -22,10 +22,13 @@ async function patch(path: string, body: Record<string, unknown>): Promise<Respo
 interface Props {
   module: CourseModule
   courseId: number
+  onApproved?: () => void
+  onApprovalStart?: () => void
+  onApprovalEnd?: () => void
 }
 
 
-export default function ModuleEditor({ module, courseId }: Props) {
+export default function ModuleEditor({ module, courseId, onApproved, onApprovalStart, onApprovalEnd }: Props) {
   const [infoOpen, setInfoOpen] = useState(true)
   const [openConcepts, setOpenConcepts] = useState<Set<number>>(
     () => new Set(module.concepts.map((c) => c.id))
@@ -55,19 +58,21 @@ export default function ModuleEditor({ module, courseId }: Props) {
 
   function approveModule() {
     setIsApproving(true)
+    onApprovalStart?.()
     const res = patch(`/api/content/modules/${module.id}`, { reviewStatus: 'APPROVED' })
     res.then((r) => {
       setIsApproving(false)
+      onApprovalEnd?.()
 
       if (!r.ok) {
         alert('Failed to approve module')
         console.error('Failed to approve module:', r.status, r.statusText)
       } else {
-        setApprovedOptimistically(true) // Update UI immediately for better UX
+        setApprovedOptimistically(true)
+        onApproved?.()
         router.refresh()
       }
     })
-    
   }
 
   return (
@@ -348,6 +353,7 @@ function ExerciseCard({ exercise }: { exercise: CourseExercise }) {
           <VizChip
             templateId={exercise.visualizationType}
             params={exercise.visualizationParams ?? {}}
+            targetState={exercise.targetState ?? undefined}
           />
         </div>
       )}

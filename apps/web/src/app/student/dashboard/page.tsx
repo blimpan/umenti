@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Clock } from 'lucide-react'
 import Sidebar from '@/components/Sidebar'
-import { GetStudentCoursesResponse, GetReviewConceptsResponse } from '@metis/types'
+import { GetStudentCoursesResponse, GetStudentInvitesResponse, GetReviewConceptsResponse } from '@metis/types'
 import CourseInviteCard from './CourseInviteCard'
 import { timedFetch } from '@/lib/timed-fetch'
 
@@ -14,8 +14,12 @@ export default async function StudentDashboard() {
   if (!session) redirect('/login')
   if (session.user.user_metadata?.role !== 'STUDENT') redirect('/teacher/dashboard')
 
-  const [coursesRes, reviewRes] = await Promise.all([
+  const [coursesRes, invitesRes, reviewRes] = await Promise.all([
     timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/courses`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      next: { revalidate: 60 },
+    }),
+    timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/invites`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
       cache: 'no-store',
     }),
@@ -25,11 +29,9 @@ export default async function StudentDashboard() {
     }),
   ])
 
-  const courses: GetStudentCoursesResponse = coursesRes.ok ? await coursesRes.json() : []
+  const active: GetStudentCoursesResponse = coursesRes.ok ? await coursesRes.json() : []
+  const pending: GetStudentInvitesResponse = invitesRes.ok ? await invitesRes.json() : []
   const reviewConcepts: GetReviewConceptsResponse = reviewRes.ok ? await reviewRes.json() : []
-
-  const active = courses.filter(c => c.enrollmentStatus === 'ACTIVE')
-  const pending = courses.filter(c => c.enrollmentStatus === 'PENDING')
   const reviewCount = reviewConcepts.length
 
   return (

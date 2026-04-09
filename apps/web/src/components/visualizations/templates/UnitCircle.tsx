@@ -68,7 +68,8 @@ export default function UnitCircle({
         ref={svgRef}
         width="100%"
         viewBox="0 0 300 300"
-        style={{ cursor: dragging.current ? 'grabbing' : 'default' }}
+        overflow="visible"
+        style={{ cursor: dragging.current ? 'grabbing' : 'default', maxWidth: '360px', display: 'block', margin: '0 auto' }}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
@@ -98,8 +99,8 @@ export default function UnitCircle({
 
         {showComponents && (
           <>
-            <text x={(CX + px) / 2} y={CY + 16} fontSize={9} fill="#f59e0b" textAnchor="middle">cos = {fmt(Math.cos(rad))}</text>
-            <text x={px + 6} y={(CY + py) / 2 + 3} fontSize={9} fill="#10b981">sin = {fmt(Math.sin(rad))}</text>
+            <text x={(CX + px) / 2} y={CY + 16} fontSize={12} fill="#f59e0b" textAnchor="middle">cos = {fmt(Math.cos(rad))}</text>
+            <text x={px + 6} y={(CY + py) / 2 + 3} fontSize={12} fill="#10b981">sin = {fmt(Math.sin(rad))}</text>
           </>
         )}
       </svg>

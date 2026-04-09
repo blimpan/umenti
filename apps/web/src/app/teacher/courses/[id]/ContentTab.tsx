@@ -19,9 +19,12 @@ interface Props {
   course: CourseDetail
   selectedModuleId: number | null
   onSelectModule: (id: number) => void
+  onModuleApproved: (moduleId: number) => void
+  onApprovalStart: () => void
+  onApprovalEnd: () => void
 }
 
-export default function ContentTab({ course, selectedModuleId, onSelectModule }: Props) {
+export default function ContentTab({ course, selectedModuleId, onSelectModule, onModuleApproved, onApprovalStart, onApprovalEnd }: Props) {
   const approvedCount = course.modules.filter((m) => m.reviewStatus === 'APPROVED').length
   const selectedModule =
     course.modules.find((m) => m.id === selectedModuleId) ?? course.modules[0] ?? null
@@ -62,7 +65,14 @@ export default function ContentTab({ course, selectedModuleId, onSelectModule }:
       {/* Module editor */}
       <main className="flex-1 overflow-y-auto bg-white">
         {selectedModule ? (
-          <ModuleEditor module={selectedModule} courseId={course.id} />
+          <ModuleEditor
+            key={selectedModule.id}
+            module={selectedModule}
+            courseId={course.id}
+            onApproved={() => onModuleApproved(selectedModule.id)}
+            onApprovalStart={onApprovalStart}
+            onApprovalEnd={onApprovalEnd}
+          />
         ) : (
           <div className="p-8 text-gray-400 text-sm">No modules to show.</div>
         )}

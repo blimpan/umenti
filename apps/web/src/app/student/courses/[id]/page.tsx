@@ -26,7 +26,7 @@ export default async function StudentCoursePage({ params }: Props) {
   const [courseRes, progressRes] = await Promise.all([
     timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/courses/${id}/overview`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: 'no-store',
+      next: { revalidate: 300 },
     }),
     timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/courses/${id}/progress`, {
       headers: { Authorization: `Bearer ${session.access_token}` },

@@ -41,6 +41,7 @@ export default function ModuleItem({
 
   const moduleName = useWatch({ control, name: `modules.${nestIndex}.name` }) ?? ''
   const currentObjectives = useWatch({ control, name: `modules.${nestIndex}.objectives` }) ?? []
+  const currentOutcomes = useWatch({ control, name: `modules.${nestIndex}.outcomes` }) ?? []
 
   const moduleErrors = errors.modules?.[nestIndex]
 
@@ -91,7 +92,7 @@ export default function ModuleItem({
                 <SuggestedInput
                   {...register(`modules.${nestIndex}.objectives.${i}.text`)}
                   field="module.objective"
-                  context={{ ...courseContext, moduleName }}
+                  context={{ ...courseContext, moduleName, existingObjectives: currentObjectives.map((o) => o.text).filter(Boolean) }}
                   placeholder="e.g. Understanding market equilibrium"
                   className="flex-1"
                   onAccept={(val) =>
@@ -138,7 +139,8 @@ export default function ModuleItem({
                   context={{
                     ...courseContext,
                     moduleName,
-                    existingObjectives: currentObjectives.map((o) => o.text),
+                    existingObjectives: currentObjectives.map((o) => o.text).filter(Boolean),
+                    existingOutcomes: currentOutcomes.map((o) => o.text).filter(Boolean),
                   }}
                   placeholder="e.g. Student can calculate the equilibrium price on a graph"
                   className="flex-1"

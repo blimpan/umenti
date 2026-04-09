@@ -29,6 +29,21 @@ export default function CoursePage({ course }: { course: CourseDetail }) {
   )
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [localApprovedIds, setLocalApprovedIds] = useState<Set<number>>(
+    () => new Set(course.modules.filter((m) => m.reviewStatus === 'APPROVED').map((m) => m.id))
+  )
+  const [pendingApprovals, setPendingApprovals] = useState(0)
+
+  const effectiveCourse = {
+    ...course,
+    modules: course.modules.map((m) =>
+      localApprovedIds.has(m.id) ? { ...m, reviewStatus: 'APPROVED' as const } : m
+    ),
+  }
+
+  function handleModuleApproved(moduleId: number) {
+    setLocalApprovedIds((prev) => new Set([...prev, moduleId]))
+  }
 
   const isFullBleed = activeTab === 'content'
 
@@ -83,7 +98,7 @@ export default function CoursePage({ course }: { course: CourseDetail }) {
           {course.status === 'DRAFT' && (
             <button
               onClick={publishCourse}
-              disabled={publishing || course.modules.some((m) => m.reviewStatus !== 'APPROVED')}
+              disabled={publishing || pendingApprovals > 0 || effectiveCourse.modules.some((m) => m.reviewStatus !== 'APPROVED')}
               className="text-sm font-medium bg-primary text-white px-4 py-1.5 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {publishing ? 'Publishing...' : 'Publish'}
@@ -113,13 +128,16 @@ export default function CoursePage({ course }: { course: CourseDetail }) {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
-        <OverviewTab course={course} onOpenModule={openModule} />
+        <OverviewTab course={effectiveCourse} onOpenModule={openModule} />
       )}
       {activeTab === 'content' && (
         <ContentTab
-          course={course}
+          course={effectiveCourse}
           selectedModuleId={selectedModuleId}
           onSelectModule={setSelectedModuleId}
+          onModuleApproved={handleModuleApproved}
+          onApprovalStart={() => setPendingApprovals((n) => n + 1)}
+          onApprovalEnd={() => setPendingApprovals((n) => n - 1)}
         />
       )}
       {activeTab === 'analytics' && (

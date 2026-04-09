@@ -15,6 +15,7 @@ import StepReview from './StepReview'
 import { apiFetch } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { useGenerationPoller } from '@/app/teacher/TeacherGenerationPoller'
 
 const STORAGE_KEY = 'course-wizard-draft'
 
@@ -48,6 +49,7 @@ export default function CourseWizard() {
   const [step, setStep] = useState(1)
   const [useTemplate, setUseTemplate] = useState<boolean | null>(null)
   const router = useRouter()
+  const { wakePoller } = useGenerationPoller()
 
   const form = useForm<CourseWizardInput>({
     resolver: zodResolver(WizardSchema),
@@ -110,6 +112,7 @@ export default function CourseWizard() {
     }
 
     localStorage.removeItem(STORAGE_KEY)
+    wakePoller()
     router.push('/teacher/courses')
   }
 

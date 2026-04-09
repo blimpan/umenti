@@ -4,6 +4,17 @@ import { useState } from 'react'
 import { Dialog } from 'radix-ui'
 import VisualizationRenderer from '@/components/visualizations/VisualizationRenderer'
 
+const TEMPLATE_LABELS: Record<string, string> = {
+  cartesian_graph:          'Cartesian graph',
+  unit_circle:              'Unit circle',
+  probability_distribution: 'Probability distribution',
+  geometric_shape_explorer: 'Geometric shape',
+}
+
+function templateLabel(id: string): string {
+  return TEMPLATE_LABELS[id] ?? id
+}
+
 interface VizChipProps {
   templateId: string
   params: Record<string, unknown>
@@ -20,7 +31,7 @@ export function VizChip({ templateId, params, targetState }: VizChipProps) {
         className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors border border-indigo-100"
       >
         <span>⬡</span>
-        <span className="font-mono">{templateId}</span>
+        <span>{templateLabel(templateId)}</span>
       </button>
 
       <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -28,8 +39,7 @@ export function VizChip({ templateId, params, targetState }: VizChipProps) {
           <Dialog.Overlay className="fixed inset-0 bg-black/30 z-40" />
           <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white rounded-xl shadow-xl w-[540px] max-h-[85vh] overflow-auto p-6 focus:outline-none">
             <Dialog.Title className="text-sm font-semibold text-gray-700 mb-4">
-              Visualization ·{' '}
-              <span className="font-mono text-indigo-600">{templateId}</span>
+              {templateLabel(templateId)}
             </Dialog.Title>
 
             <VisualizationRenderer templateId={templateId} params={params} />

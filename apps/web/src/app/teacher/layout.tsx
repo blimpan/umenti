@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
-import { TeacherGenerationPoller } from './TeacherGenerationPoller'
+import { GenerationPollerProvider } from './TeacherGenerationPoller'
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -10,12 +10,13 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   if (user.user_metadata?.role !== 'TEACHER') redirect('/student/dashboard')
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar role="TEACHER" />
-      <main className="flex-1 min-w-0">
-        {children}
-      </main>
-      <TeacherGenerationPoller />
-    </div>
+    <GenerationPollerProvider>
+      <div className="flex min-h-screen">
+        <Sidebar role="TEACHER" />
+        <main className="flex-1 min-w-0">
+          {children}
+        </main>
+      </div>
+    </GenerationPollerProvider>
   )
 }
