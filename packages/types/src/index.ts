@@ -321,7 +321,7 @@ export type AttemptsOverTimePoint = {
   date: string
   correct: number
   incorrect: number
-  total: number
+  total: number   // always === correct + incorrect
 }
 
 export type GetCourseAnalyticsResponse = {
