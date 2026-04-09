@@ -105,6 +105,11 @@ describe('computeAtRisk', () => {
     expect(computeAtRisk(30, yesterday)).toBe(false)
   })
 
+  it('returns false when the student was active exactly 7 days ago', () => {
+    const exactlySevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    expect(computeAtRisk(30, exactlySevenDaysAgo)).toBe(false)
+  })
+
   it('returns true when progress < 50 and inactive for more than 7 days', () => {
     expect(computeAtRisk(49, sevenDaysAgo)).toBe(true)
     expect(computeAtRisk(0, sevenDaysAgo)).toBe(true)
