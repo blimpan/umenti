@@ -560,6 +560,25 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
     // ── Record attempt rows (one per concept) ─────────────────────────────────
     const moduleId2  = exercise.courseModuleId
     const courseId2  = exercise.courseModule.courseId
+
+    // Normalise the raw answer to a human-readable string for LLM analysis.
+    // MULTIPLE_CHOICE: resolve option text so the LLM sees words, not indices.
+    // INTERACTIVE: serialise vizState so the submission is inspectable (capped at 2 KB).
+    // FREE_TEXT / MATH: use the raw string.
+    const selectedIndex = typeof answer === 'number' ? answer : parseInt(String(answer))
+    const rawOptions    = exercise.options
+    const safeOptions: string[] | null =
+      Array.isArray(rawOptions) && rawOptions.every((o): o is string => typeof o === 'string')
+        ? rawOptions
+        : null
+
+    const answerText: string =
+      exercise.type === 'MULTIPLE_CHOICE'
+        ? String(safeOptions?.[selectedIndex] ?? answer)
+        : exercise.type === 'INTERACTIVE'
+        ? JSON.stringify((req.body as { vizState?: unknown }).vizState ?? {}).slice(0, 2000)
+        : String(answer)
+
     prisma.exerciseAttempt.createMany({
       data: conceptIds.map(conceptId => ({
         userId:     req.user!.id,
@@ -571,6 +590,7 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
         phase:      isPhase1 ? 'PRIOR_KNOWLEDGE' : 'MAIN',
         isCorrect:  correct,
         scoreChange: isPhase1 ? 0 : scoreChange,
+        answer:     answerText,
       })),
     }).catch(err => logger.error({ err }, '[ExerciseAttempt insert]'))
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeProgress, latestSession, pickGranularity } from './analytics'
+import { computeProgress, latestSession, pickGranularity, computeAtRisk } from './analytics'
 import { applyDecay } from './decay'
 
 describe('computeProgress', () => {
@@ -85,5 +85,37 @@ describe('pickGranularity', () => {
     const min = new Date('2026-01-01T00:00:00Z')
     const max = new Date('2026-04-04T00:00:00Z') // ~93 days
     expect(pickGranularity(min, max)).toBe('week')
+  })
+})
+
+describe('computeAtRisk', () => {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000 - 1).toISOString()
+  const yesterday    = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  it('returns false when progress is null (student never started)', () => {
+    expect(computeAtRisk(null, null)).toBe(false)
+  })
+
+  it('returns false when progress is 50 or above', () => {
+    expect(computeAtRisk(50, sevenDaysAgo)).toBe(false)
+    expect(computeAtRisk(75, sevenDaysAgo)).toBe(false)
+  })
+
+  it('returns false when progress < 50 but student was active within 7 days', () => {
+    expect(computeAtRisk(30, yesterday)).toBe(false)
+  })
+
+  it('returns false when the student was active exactly 7 days ago', () => {
+    const exactlySevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    expect(computeAtRisk(30, exactlySevenDaysAgo)).toBe(false)
+  })
+
+  it('returns true when progress < 50 and inactive for more than 7 days', () => {
+    expect(computeAtRisk(49, sevenDaysAgo)).toBe(true)
+    expect(computeAtRisk(0, sevenDaysAgo)).toBe(true)
+  })
+
+  it('returns true when progress < 50 and lastActiveAt is null', () => {
+    expect(computeAtRisk(20, null)).toBe(true)
   })
 })

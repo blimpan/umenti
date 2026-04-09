@@ -316,23 +316,72 @@ export interface User {
 
 // --- Teacher analytics ---
 
+export type ConceptBreakdownItem = {
+  conceptId: number
+  conceptName: string
+  avgScore: number        // decay-weighted average score across all StudentConceptProgress rows
+  attemptCount: number    // total ExerciseAttempt rows for this concept in this course
+  studentCount: number    // distinct students who attempted this concept in this course
+}
+
 export type CourseAnalyticsStudent = {
+  userId: string
   email: string
-  progress: number | null  // 0–100 decay-weighted average effective score; null = student has not started any concept
-  lastActiveAt: string | null  // ISO 8601 string; null = student has never opened a module
+  progress: number | null   // 0–100; null if student never opened a module
+  lastActiveAt: string | null
+  atRisk: boolean           // true when progress < 50 and inactive for > 7 days
 }
 
 export type AttemptsOverTimePoint = {
-  date: string    // ISO 8601 timestamp (e.g. "2026-04-04T10:00:00.000Z")
+  date: string
   correct: number
   incorrect: number
-  total: number
+  total: number   // always === correct + incorrect
 }
 
 export type GetCourseAnalyticsResponse = {
   students: CourseAnalyticsStudent[]
   attemptsOverTime: AttemptsOverTimePoint[]
   granularity: 'hour' | 'day' | 'week'
+  conceptBreakdown: ConceptBreakdownItem[]
+}
+
+export type StudentConceptDetail = {
+  conceptId: number
+  conceptName: string
+  score: number           // raw score (not decay-applied)
+  decayedScore: number    // applyDecay(score, lastActivityAt)
+  lastActivityAt: string  // ISO string
+}
+
+export type GetStudentConceptsResponse = {
+  concepts: StudentConceptDetail[]
+}
+
+export type ExerciseAnalysisSummary = {
+  exerciseId: number
+  question: string
+  type: string            // ExerciseType enum value as string
+  analysis: {
+    summary: string
+    commonMisconceptions: string[]
+    attemptCountAtGeneration: number
+    generatedAt: string   // ISO string
+  } | null
+}
+
+export type GetExerciseAnalyticsResponse = {
+  exercises: ExerciseAnalysisSummary[]
+}
+
+export type TriggerAnalysisResponse = {
+  status: 'generated' | 'up_to_date'
+  analysis: {
+    summary: string
+    commonMisconceptions: string[]
+    attemptCountAtGeneration: number
+    generatedAt: string
+  }
 }
 
 // --- Rich input (TipTap editor) ---

@@ -4,8 +4,10 @@ import prisma from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { triggerGeneration } from '../services/courseGeneration'
 import { logger, llmLogger } from '../lib/logger'
-import { CourseWizardInput, CourseListItem, CourseDetail, ReviewStatus, CourseConcept, CourseExercise, GetCourseAnalyticsResponse } from '@metis/types'
-import { computeProgress, latestSession, pickGranularity } from '../lib/analytics'
+import { CourseWizardInput, CourseListItem, CourseDetail, ReviewStatus, CourseConcept, CourseExercise, GetCourseAnalyticsResponse, GetStudentConceptsResponse, GetExerciseAnalyticsResponse, TriggerAnalysisResponse } from '@metis/types'
+import { computeProgress, latestSession, pickGranularity, computeAtRisk } from '../lib/analytics'
+import { applyDecay } from '../lib/decay'
+import { generateExerciseAnalysis } from '../lib/exerciseAnalysis'
 
 const router = Router()
 
@@ -403,15 +405,16 @@ router.get('/:id/analytics', requireAuth, async (req, res) => {
     )
 
     if (validEnrollments.length === 0) {
-      res.json({ students: [], attemptsOverTime: [], granularity: 'day' } satisfies GetCourseAnalyticsResponse)
+      res.json({ students: [], attemptsOverTime: [], granularity: 'day', conceptBreakdown: [] } satisfies GetCourseAnalyticsResponse)
       return
     }
 
     const userIds = validEnrollments.map(e => e.userId)
     const granularity = pickGranularity(rangeRow!.min, rangeRow!.max)
 
-    // Round 2 — progress, sessions, and attempt time-series in parallel, scoped to this course
-    const [progressRows, sessionRows, attemptRows] = await Promise.all([
+    // Round 2 — progress, sessions, attempt time-series, concept progress, and attempt
+    //           aggregates in parallel, all scoped to this course
+    const [progressRows, sessionRows, attemptRows, conceptProgressRows, conceptAttemptRows] = await Promise.all([
       prisma.studentConceptProgress.findMany({
         where: {
           userId: { in: userIds },
@@ -437,6 +440,26 @@ router.get('/:id/analytics', requireAuth, async (req, res) => {
         GROUP BY 1
         ORDER BY 1 ASC
       `,
+      // Query A — all StudentConceptProgress rows for this course's concepts (for avgScore + names)
+      prisma.studentConceptProgress.findMany({
+        where: { concept: { courseId } },
+        select: {
+          conceptId: true,
+          score: true,
+          lastActivityAt: true,
+          concept: { select: { name: true } }
+        }
+      }),
+      // Query B — aggregated attempt and student counts per concept
+      prisma.$queryRaw<{ conceptId: number; attemptCount: bigint; studentCount: bigint }[]>`
+        SELECT
+          "conceptId",
+          COUNT(*)           AS "attemptCount",
+          COUNT(DISTINCT "userId") AS "studentCount"
+        FROM "ExerciseAttempt"
+        WHERE "courseId" = ${courseId}
+        GROUP BY "conceptId"
+      `,
     ])
 
     // Group rows by userId for O(n) lookup
@@ -453,17 +476,56 @@ router.get('/:id/analytics', requireAuth, async (req, res) => {
     }
 
     const students = validEnrollments
-      .map(e => ({
-        email: e.student.user.email,
-        progress: computeProgress(progressByUser.get(e.userId) ?? []),
-        lastActiveAt: latestSession(sessionsByUser.get(e.userId) ?? []),
-      }))
+      .map(e => {
+        const progress = computeProgress(progressByUser.get(e.userId) ?? [])
+        const lastActiveAt = latestSession(sessionsByUser.get(e.userId) ?? [])
+        return {
+          userId: e.userId,
+          email: e.student.user.email,
+          progress,
+          lastActiveAt,
+          atRisk: computeAtRisk(progress, lastActiveAt),
+        }
+      })
       // Default sort: most recently active first; nulls last
       .sort((a, b) => {
         const av = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0
         const bv = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0
         return bv - av
       })
+
+    // Group concept progress rows by conceptId for avgScore computation
+    const progressByConcept = new Map<number, { score: number; lastActivityAt: Date; name: string }[]>()
+    for (const row of conceptProgressRows) {
+      if (!progressByConcept.has(row.conceptId)) progressByConcept.set(row.conceptId, [])
+      progressByConcept.get(row.conceptId)!.push({ score: row.score, lastActivityAt: row.lastActivityAt, name: row.concept.name })
+    }
+
+    // Build a lookup map from the aggregated Query B rows
+    const attemptAggByConcept = new Map<number, { attemptCount: number; studentCount: number }>()
+    for (const row of conceptAttemptRows) {
+      attemptAggByConcept.set(row.conceptId, {
+        attemptCount: Number(row.attemptCount),
+        studentCount: Number(row.studentCount),
+      })
+    }
+
+    // Build conceptBreakdown — only concepts with at least one StudentConceptProgress row
+    const conceptBreakdown = Array.from(progressByConcept.entries())
+      .map(([conceptId, rows]) => {
+        const decayedScores = rows.map(r => applyDecay(r.score, r.lastActivityAt))
+        const avgScore = decayedScores.reduce((sum, s) => sum + s, 0) / decayedScores.length
+        const agg = attemptAggByConcept.get(conceptId)
+        return {
+          conceptId,
+          conceptName:  rows[0].name,
+          avgScore:     Math.round(avgScore * 10) / 10,
+          attemptCount: agg?.attemptCount ?? 0,
+          studentCount: agg?.studentCount ?? 0,
+        }
+      })
+      // Sort by most-attempted first for a useful default order
+      .sort((a, b) => b.attemptCount - a.attemptCount)
 
     const result: GetCourseAnalyticsResponse = {
       students,
@@ -474,12 +536,188 @@ router.get('/:id/analytics', requireAuth, async (req, res) => {
         incorrect: Number(r.incorrect),
         total:     Number(r.total),
       })),
+      conceptBreakdown,
     }
 
     res.json(result)
   } catch (err) {
     logger.error({ err }, '[GET /api/courses/:id/analytics]')
     res.status(500).json({ error: 'Failed to fetch analytics' })
+  }
+})
+
+// GET /api/courses/:id/analytics/students/:userId/concepts
+// Returns per-concept progress for a single student in a course
+router.get('/:id/analytics/students/:userId/concepts', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id as string)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid course ID' }); return }
+
+  try {
+    const course = await prisma.course.findFirst({
+      where: { id, teacherId: req.user!.id },
+      select: { id: true },
+    })
+    if (!course) { res.status(404).json({ error: 'Course not found' }); return }
+
+    const { userId } = req.params
+
+    const progressRows = await prisma.studentConceptProgress.findMany({
+      where: {
+        userId,
+        concept: { courseId: id },
+      },
+      select: {
+        conceptId: true,
+        score: true,
+        lastActivityAt: true,
+        concept: { select: { name: true } },
+      },
+    })
+
+    const result: GetStudentConceptsResponse = {
+      concepts: progressRows.map(row => ({
+        conceptId: row.conceptId,
+        conceptName: row.concept.name,
+        score: row.score,
+        decayedScore: applyDecay(row.score, row.lastActivityAt),
+        lastActivityAt: row.lastActivityAt.toISOString(),
+      })),
+    }
+
+    res.json(result)
+  } catch (err) {
+    logger.error({ err }, '[GET /api/courses/:id/analytics/students/:userId/concepts]')
+    res.status(500).json({ error: 'Failed to fetch student concept progress' })
+  }
+})
+
+// GET /api/courses/:id/analytics/exercises
+// Returns all exercises in the course with their analysis (if any)
+router.get('/:id/analytics/exercises', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id as string)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid course ID' }); return }
+
+  try {
+    const course = await prisma.course.findFirst({
+      where: { id, teacherId: req.user!.id },
+      select: { id: true },
+    })
+    if (!course) { res.status(404).json({ error: 'Course not found' }); return }
+
+    const exercises = await prisma.exercise.findMany({
+      where: { courseModule: { courseId: id } },
+      select: {
+        id: true,
+        question: true,
+        type: true,
+        analysis: {
+          select: {
+            summary: true,
+            commonMisconceptions: true,
+            attemptCountAtGeneration: true,
+            generatedAt: true,
+          },
+        },
+      },
+      orderBy: [{ courseModule: { order: 'asc' } }, { order: 'asc' }],
+    })
+
+    const result: GetExerciseAnalyticsResponse = {
+      exercises: exercises.map(ex => ({
+        exerciseId: ex.id,
+        question: ex.question,
+        type: ex.type,
+        analysis: ex.analysis
+          ? {
+              summary: ex.analysis.summary,
+              commonMisconceptions: ex.analysis.commonMisconceptions as string[],
+              attemptCountAtGeneration: ex.analysis.attemptCountAtGeneration,
+              generatedAt: ex.analysis.generatedAt.toISOString(),
+            }
+          : null,
+      })),
+    }
+
+    res.json(result)
+  } catch (err) {
+    logger.error({ err }, '[GET /api/courses/:id/analytics/exercises]')
+    res.status(500).json({ error: 'Failed to fetch exercise analytics' })
+  }
+})
+
+// POST /api/courses/:id/analytics/exercises/:exerciseId/analyze
+// Triggers LLM analysis for one exercise on-demand
+router.post('/:id/analytics/exercises/:exerciseId/analyze', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id as string)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid course ID' }); return }
+
+  const exerciseId = parseInt(req.params.exerciseId as string)
+  if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid exercise ID' }); return }
+
+  try {
+    const course = await prisma.course.findFirst({
+      where: { id, teacherId: req.user!.id },
+      select: { id: true },
+    })
+    if (!course) { res.status(404).json({ error: 'Course not found' }); return }
+
+    const exercise = await prisma.exercise.findFirst({
+      where: { id: exerciseId, courseModule: { courseId: id } },
+      select: { id: true }
+    })
+    if (!exercise) {
+      res.status(404).json({ error: 'Exercise not found' })
+      return
+    }
+
+    const [currentCount, existing] = await Promise.all([
+      prisma.exerciseAttempt.count({ where: { exerciseId } }),
+      prisma.exerciseAnalysis.findUnique({ where: { exerciseId } }),
+    ])
+
+    if (existing && existing.attemptCountAtGeneration >= currentCount) {
+      const response: TriggerAnalysisResponse = {
+        status: 'up_to_date',
+        analysis: {
+          summary: existing.summary,
+          commonMisconceptions: existing.commonMisconceptions as string[],
+          attemptCountAtGeneration: existing.attemptCountAtGeneration,
+          generatedAt: existing.generatedAt.toISOString(),
+        },
+      }
+      res.status(200).json(response)
+      return
+    }
+
+    try {
+      await generateExerciseAnalysis(exerciseId)
+    } catch (err: any) {
+      if (err?.message === 'No answers available for analysis') {
+        res.status(422).json({ error: 'No answers available for analysis' })
+        return
+      }
+      throw err
+    }
+
+    const freshAnalysis = await prisma.exerciseAnalysis.findUnique({ where: { exerciseId } })
+    if (!freshAnalysis) {
+      res.status(500).json({ error: 'Analysis generation failed' })
+      return
+    }
+
+    const response: TriggerAnalysisResponse = {
+      status: 'generated',
+      analysis: {
+        summary: freshAnalysis.summary,
+        commonMisconceptions: freshAnalysis.commonMisconceptions as string[],
+        attemptCountAtGeneration: freshAnalysis.attemptCountAtGeneration,
+        generatedAt: freshAnalysis.generatedAt.toISOString(),
+      },
+    }
+    res.status(201).json(response)
+  } catch (err) {
+    logger.error({ err }, '[POST /api/courses/:id/analytics/exercises/:exerciseId/analyze]')
+    res.status(500).json({ error: 'Failed to trigger exercise analysis' })
   }
 })
 

@@ -46,3 +46,19 @@ export function pickGranularity(
   if (spanHours < 720) return 'day'
   return 'week'
 }
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Returns true when a student is at risk of falling behind.
+ * Criteria: progress is defined but below 50, AND the student has not been
+ * active in the last 7 days (or has never been active despite having progress).
+ */
+export function computeAtRisk(
+  progress: number | null,
+  lastActiveAt: string | null
+): boolean {
+  if (progress === null || progress >= 50) return false
+  if (!lastActiveAt) return true
+  return Date.now() - new Date(lastActiveAt).getTime() > SEVEN_DAYS_MS
+}
