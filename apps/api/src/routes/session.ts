@@ -558,16 +558,20 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
 
     // Normalise the raw answer to a human-readable string for LLM analysis.
     // MULTIPLE_CHOICE: resolve option text so the LLM sees words, not indices.
-    // INTERACTIVE: serialise vizState so the submission is inspectable.
+    // INTERACTIVE: serialise vizState so the submission is inspectable (capped at 2 KB).
     // FREE_TEXT / MATH: use the raw string.
-    const options = exercise.options as string[] | null
+    const selectedIndex = typeof answer === 'number' ? answer : parseInt(String(answer))
+    const rawOptions    = exercise.options
+    const safeOptions: string[] | null =
+      Array.isArray(rawOptions) && rawOptions.every((o): o is string => typeof o === 'string')
+        ? rawOptions
+        : null
+
     const answerText: string =
       exercise.type === 'MULTIPLE_CHOICE'
-        ? String(
-            options?.[typeof answer === 'number' ? answer : parseInt(String(answer))] ?? answer
-          )
+        ? String(safeOptions?.[selectedIndex] ?? answer)
         : exercise.type === 'INTERACTIVE'
-        ? JSON.stringify((req.body as { vizState?: unknown }).vizState ?? {})
+        ? JSON.stringify((req.body as { vizState?: unknown }).vizState ?? {}).slice(0, 2000)
         : String(answer)
 
     prisma.exerciseAttempt.createMany({
