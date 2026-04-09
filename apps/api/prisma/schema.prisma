@@ -113,7 +113,6 @@ model Course {
   concepts      Concept[]
   materials     CourseMaterial[]
   enrollments      Enrollment[]
-  exerciseAnalyses ExerciseAnalysis[]
 }
 
 model Enrollment {
@@ -411,7 +410,6 @@ model ExerciseAnalysis {
   generatedAt              DateTime @default(now())
 
   exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId])
 }
