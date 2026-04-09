@@ -305,8 +305,9 @@ export interface User {
 export type ConceptBreakdownItem = {
   conceptId: number
   conceptName: string
-  totalAttempts: number
-  incorrectRate: number   // 0–1; fraction of attempts that were incorrect
+  avgScore: number        // decay-weighted average score across all StudentConceptProgress rows
+  attemptCount: number    // total ExerciseAttempt rows for this concept in this course
+  studentCount: number    // distinct students who attempted this concept in this course
 }
 
 export type CourseAnalyticsStudent = {
@@ -334,9 +335,9 @@ export type GetCourseAnalyticsResponse = {
 export type StudentConceptDetail = {
   conceptId: number
   conceptName: string
-  effectiveScore: number | null   // null if student has no progress row for this concept
-  totalAttempts: number
-  correctRate: number | null      // null if totalAttempts === 0
+  score: number           // raw score (not decay-applied)
+  decayedScore: number    // applyDecay(score, lastActivityAt)
+  lastActivityAt: string  // ISO string
 }
 
 export type GetStudentConceptsResponse = {
@@ -345,15 +346,14 @@ export type GetStudentConceptsResponse = {
 
 export type ExerciseAnalysisSummary = {
   exerciseId: number
-  moduleId: number
-  moduleName: string
   question: string
-  totalAttempts: number
-  correctRate: number | null      // null if no attempts
-  analysisStatus: 'none' | 'ready' | 'stale'
-  generatedAt: string | null
-  summary: string | null
-  commonMisconceptions: string[] | null
+  type: string            // ExerciseType enum value as string
+  analysis: {
+    summary: string
+    commonMisconceptions: string[]
+    attemptCountAtGeneration: number
+    generatedAt: string   // ISO string
+  } | null
 }
 
 export type GetExerciseAnalyticsResponse = {
@@ -361,10 +361,13 @@ export type GetExerciseAnalyticsResponse = {
 }
 
 export type TriggerAnalysisResponse = {
-  exerciseId: number
-  summary: string
-  commonMisconceptions: string[]
-  generatedAt: string
+  status: 'generated' | 'up_to_date'
+  analysis: {
+    summary: string
+    commonMisconceptions: string[]
+    attemptCountAtGeneration: number
+    generatedAt: string
+  }
 }
 
 // --- Rich input (TipTap editor) ---

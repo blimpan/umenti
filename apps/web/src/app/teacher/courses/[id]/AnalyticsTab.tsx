@@ -2,16 +2,26 @@
 
 import { useEffect, useState } from 'react'
 import { apiFetch } from '@/lib/api'
-import { CourseAnalyticsStudent, AttemptsOverTimePoint, GetCourseAnalyticsResponse } from '@metis/types'
+import {
+  CourseAnalyticsStudent,
+  AttemptsOverTimePoint,
+  GetCourseAnalyticsResponse,
+  ConceptBreakdownItem,
+  StudentConceptDetail,
+  GetStudentConceptsResponse,
+} from '@metis/types'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts'
+import ConceptBreakdownSection from './ConceptBreakdownSection'
+import ExerciseAnalysisSection from './ExerciseAnalysisSection'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 
 type SortKey = 'email' | 'progress' | 'lastActiveAt'
 type SortDir = 'asc' | 'desc'
+type AnalyticsSubTab = 'students' | 'concepts' | 'exercises'
 
 function formatLastActive(iso: string | null): string {
   if (!iso) return 'Never'
@@ -126,6 +136,101 @@ function AttemptsChart({
   )
 }
 
+// ---- Student concept drilldown ----
+
+interface StudentConceptDrilldownProps {
+  courseId: number
+  userId: string
+}
+
+function StudentConceptDrilldown({ courseId, userId }: StudentConceptDrilldownProps) {
+  const [concepts, setConcepts] = useState<StudentConceptDetail[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      try {
+        const res = await apiFetch(
+          `${API}/api/courses/${courseId}/analytics/students/${userId}/concepts`
+        )
+        if (!res.ok) throw new Error('Failed')
+        const data: GetStudentConceptsResponse = await res.json()
+        if (!cancelled) {
+          setConcepts(data.concepts)
+          setLoading(false)
+        }
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
+        if (!cancelled) {
+          setError(true)
+          setLoading(false)
+        }
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [courseId, userId])
+
+  if (loading) {
+    return (
+      <div className="px-4 py-3 bg-gray-50">
+        <div className="space-y-1.5">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-6 bg-gray-200 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 py-3 bg-gray-50">
+        <p className="text-xs text-red-500">Could not load concepts.</p>
+      </div>
+    )
+  }
+
+  if (concepts.length === 0) {
+    return (
+      <div className="px-4 py-3 bg-gray-50">
+        <p className="text-xs text-gray-400">No concept data yet for this student.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Concept breakdown</p>
+      <div className="space-y-1.5">
+        {concepts.map(c => (
+          <div key={c.conceptId} className="grid grid-cols-[1fr_80px_80px] items-center text-xs gap-2">
+            <span className="text-gray-700 truncate">{c.conceptName}</span>
+            <span className="text-gray-500">
+              Raw: <span className="font-medium text-gray-700">{Math.round(c.score)}%</span>
+            </span>
+            <span className="text-gray-500">
+              Decayed: <span className="font-medium text-gray-700">{Math.round(c.decayedScore)}%</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ---- Main component ----
+
+const SUB_TABS: { key: AnalyticsSubTab; label: string }[] = [
+  { key: 'students', label: 'Students' },
+  { key: 'concepts', label: 'Concepts' },
+  { key: 'exercises', label: 'Exercises' },
+]
+
 interface Props {
   courseId: number
 }
@@ -133,11 +238,14 @@ interface Props {
 export default function AnalyticsTab({ courseId }: Props) {
   const [students, setStudents] = useState<CourseAnalyticsStudent[]>([])
   const [attemptsOverTime, setAttemptsOverTime] = useState<AttemptsOverTimePoint[]>([])
+  const [conceptBreakdown, setConceptBreakdown] = useState<ConceptBreakdownItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortKey>('lastActiveAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [granularity, setGranularity] = useState<'hour' | 'day' | 'week'>('day')
+  const [subTab, setSubTab] = useState<AnalyticsSubTab>('students')
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -152,6 +260,7 @@ export default function AnalyticsTab({ courseId }: Props) {
         setStudents(data.students)
         setAttemptsOverTime(data.attemptsOverTime)
         setGranularity(data.granularity)
+        setConceptBreakdown(data.conceptBreakdown)
         setLoading(false)
       } catch (err) {
         if ((err as Error).name === 'AbortError') return
@@ -173,7 +282,12 @@ export default function AnalyticsTab({ courseId }: Props) {
     }
   }
 
+  function toggleStudentExpand(userId: string) {
+    setExpandedUserId(prev => (prev === userId ? null : userId))
+  }
+
   const sorted = sortStudents(students, sortBy, sortDir)
+  const atRiskCount = students.filter(s => s.atRisk).length
 
   if (loading) {
     return (
@@ -194,49 +308,120 @@ export default function AnalyticsTab({ courseId }: Props) {
     <div>
       <AttemptsChart data={attemptsOverTime} granularity={granularity} />
 
-      <div className="flex items-baseline justify-between mb-5">
-        <p className="text-sm font-semibold text-gray-900">Student progress</p>
-        <p className="text-sm text-gray-400">{students.length} student{students.length !== 1 ? 's' : ''} enrolled</p>
+      {/* Sub-tab bar */}
+      <div className="flex border-b border-gray-200 mb-6">
+        {SUB_TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setSubTab(key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              subTab === key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {students.length === 0 ? (
-        <p className="text-sm text-gray-400">No students enrolled in this course yet.</p>
-      ) : (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[1fr_100px_140px] bg-gray-50 border-b border-gray-200 px-4 py-2">
-            {(
-              [
-                { key: 'email',        label: 'Student' },
-                { key: 'progress',     label: 'Progress' },
-                { key: 'lastActiveAt', label: 'Last active' },
-              ] as { key: SortKey; label: string }[]
-            ).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => handleSort(key)}
-                className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors flex items-center"
-              >
-                {label}
-                <SortIcon col={key} sortBy={sortBy} sortDir={sortDir} />
-              </button>
-            ))}
+      {/* Students sub-tab */}
+      {subTab === 'students' && (
+        <>
+          <div className="flex items-baseline justify-between mb-5">
+            <p className="text-sm font-semibold text-gray-900">Student progress</p>
+            <div className="flex items-center gap-3">
+              {atRiskCount > 0 && (
+                <span className="text-xs font-medium bg-red-50 text-red-600 px-2 py-0.5 rounded-full">
+                  {atRiskCount} at risk
+                </span>
+              )}
+              <p className="text-sm text-gray-400">
+                {students.length} student{students.length !== 1 ? 's' : ''} enrolled
+              </p>
+            </div>
           </div>
 
-          {sorted.map((student, i) => (
-            <div
-              key={student.email}
-              className={`grid grid-cols-[1fr_100px_140px] px-4 py-3 items-center text-sm ${
-                i < sorted.length - 1 ? 'border-b border-gray-100' : ''
-              } hover:bg-gray-50 transition-colors`}
-            >
-              <span className="text-gray-800 truncate">{student.email}</span>
-              <span className="text-gray-800">
-                {student.progress === null ? '—' : `${Math.round(student.progress)}%`}
-              </span>
-              <span className="text-gray-500">{formatLastActive(student.lastActiveAt)}</span>
+          {students.length === 0 ? (
+            <p className="text-sm text-gray-400">No students enrolled in this course yet.</p>
+          ) : (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="grid grid-cols-[1fr_100px_140px_32px] bg-gray-50 border-b border-gray-200 px-4 py-2">
+                {(
+                  [
+                    { key: 'email',        label: 'Student' },
+                    { key: 'progress',     label: 'Progress' },
+                    { key: 'lastActiveAt', label: 'Last active' },
+                  ] as { key: SortKey; label: string }[]
+                ).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => handleSort(key)}
+                    className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors flex items-center"
+                  >
+                    {label}
+                    <SortIcon col={key} sortBy={sortBy} sortDir={sortDir} />
+                  </button>
+                ))}
+                <span />
+              </div>
+
+              {sorted.map((student, i) => (
+                <div key={student.email}>
+                  <button
+                    onClick={() => toggleStudentExpand(student.userId)}
+                    aria-expanded={expandedUserId === student.userId}
+                    aria-label={`Show details for ${student.email}`}
+                    className={`w-full grid grid-cols-[1fr_100px_140px_32px] px-4 py-3 items-center text-sm text-left ${
+                      i < sorted.length - 1 || expandedUserId === student.userId
+                        ? 'border-b border-gray-100'
+                        : ''
+                    } hover:bg-gray-50 transition-colors`}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="text-gray-800 truncate">{student.email}</span>
+                      {student.atRisk && (
+                        <span className="shrink-0 text-xs font-medium bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full">
+                          At risk
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-gray-800">
+                      {student.progress === null ? '—' : `${Math.round(student.progress)}%`}
+                    </span>
+                    <span className="text-gray-500">{formatLastActive(student.lastActiveAt)}</span>
+                    <span className="text-gray-400 text-xs">
+                      {expandedUserId === student.userId ? '▲' : '▼'}
+                    </span>
+                  </button>
+
+                  {expandedUserId === student.userId && (
+                    <StudentConceptDrilldown
+                      courseId={courseId}
+                      userId={student.userId}
+                    />
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
+      )}
+
+      {/* Concepts sub-tab */}
+      {subTab === 'concepts' && (
+        <>
+          <p className="text-sm font-semibold text-gray-900 mb-5">Concept breakdown</p>
+          <ConceptBreakdownSection concepts={conceptBreakdown} />
+        </>
+      )}
+
+      {/* Exercises sub-tab */}
+      {subTab === 'exercises' && (
+        <>
+          <p className="text-sm font-semibold text-gray-900 mb-5">Exercise analysis</p>
+          <ExerciseAnalysisSection courseId={courseId} />
+        </>
       )}
     </div>
   )
