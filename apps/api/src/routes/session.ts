@@ -89,9 +89,8 @@ async function applyPhase2Score(
 }
 
 const GradingSchema = z.object({
-  scoreChange: z.number().int().min(-100).max(100),
-  correct:     z.boolean(),
-  almost:      z.boolean(),   // true = partially correct; only meaningful when correct === false
+  correct: z.boolean(),
+  almost:  z.boolean(),   // true = partially correct; only meaningful when correct === false
 })
 
 /** Grades a free-text answer with a small LLM call. Returns null on failure. */
@@ -102,10 +101,12 @@ async function gradeFreeText(
   studentAnswer: string,
 ): Promise<{ scoreChange: number; correct: boolean; almost: boolean } | null> {
   try {
-    const gradeSystem = 'You are a grader. Evaluate the student answer against the sample answer and rubric. ' +
-      'Set correct=true if the answer is fully correct. ' +
-      'Set correct=false and almost=true if the answer is partially correct or on the right track but incomplete. ' +
-      'Set correct=false and almost=false if the answer is fundamentally wrong or off-topic.'
+    const gradeSystem = [
+      'You are a grader. Evaluate the student answer against the sample answer and rubric.',
+      '- correct=true if the answer is fully correct',
+      '- correct=false, almost=true if partially correct or on the right track but incomplete',
+      '- correct=false, almost=false if fundamentally wrong or off-topic',
+    ].join('\n')
     const gradeUserMessage = `Question: ${question}\nSample answer: ${sampleAnswer}\nRubric: ${rubric}\nStudent answer: ${studentAnswer}`
     llmLogger.info({ system: gradeSystem, userMessage: gradeUserMessage }, 'grade:free-text — request')
     const { output, usage } = await generateText({
@@ -114,9 +115,10 @@ async function gradeFreeText(
       system: gradeSystem,
       messages: [{ role: 'user', content: gradeUserMessage }],
     })
-    const result = output as { scoreChange: number; correct: boolean; almost: boolean }
-    llmLogger.info({ result, usage }, 'grade:free-text — response')
-    return result
+    const { correct, almost } = output as { correct: boolean; almost: boolean }
+    const scoreChange = correct ? 20 : almost ? 0 : -10
+    llmLogger.info({ correct, almost, scoreChange, usage }, 'grade:free-text — response')
+    return { correct, almost, scoreChange }
   } catch (err) {
     llmLogger.error({ err }, 'grade:free-text — failed')
     return null
@@ -425,7 +427,10 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
       }),
       prisma.exercise.findUnique({
         where:   { id: exerciseId },
-        include: { conceptLinks: true, courseModule: true },
+        include: {
+          conceptLinks: true,
+          courseModule: { include: { course: { select: { language: true } } } },
+        },
       }),
     ])
 
@@ -773,7 +778,10 @@ router.post('/exercises/:exerciseId/submit', requireAuth, async (req: Request, r
       ? `Exercise (free text): ${exercise.question}\nSample answer: ${exercise.sampleAnswer ?? 'N/A'}\nRubric: ${exercise.rubric ?? 'N/A'}`
       : `Exercise (interactive): ${exercise.question}`
 
-    const feedbackSystem = `You are a Socratic tutor responding to a single exercise submission. Focus only on this exercise — ignore any prior conversation context.
+    const language = exercise.courseModule.course.language
+    const outcomeLabel = correct ? 'CORRECT' : (savedGrading?.almost ? 'PARTIALLY CORRECT' : 'INCORRECT')
+    const feedbackSystem = `You are a Socratic tutor giving feedback on one exercise submission. Focus only on this exercise — ignore any prior conversation context.
+Respond in ${language}.
 
 Module: ${moduleData?.name}. ${moduleData?.whyThisModule ?? ''}
 
@@ -782,13 +790,14 @@ ${theoryForContext}
 
 ${exerciseContext}
 
-The student's answer was ${correct ? 'correct' : 'incorrect'}. Score change: ${scoreChange}.
+The student's answer was: ${outcomeLabel}.
 
 Instructions:
-- Write 1–3 sentences of targeted Socratic feedback about THIS answer to THIS exercise.
-- Do not reveal the correct answer. Guide with a follow-up question if incorrect.
-- Always use $...$ delimiters for inline math (e.g. $f(x) = x + 4$).
-- Be concise and specific — no generic encouragement.`
+- Write 1–3 sentences of targeted, specific feedback.
+- CORRECT: Affirm in one short sentence, then ask a question that deepens or extends the concept.
+- PARTIALLY CORRECT: Acknowledge what was right, then ask one targeted question about the missing piece.
+- INCORRECT: Ask one guiding question grounded in the theory above — do not reveal the answer or enumerate all mistakes.
+- Use $...$ for inline math, $$...$$ for display math.`
     const feedbackMessages = [{ role: 'user' as const, content: `My answer: ${answerForFeedback}` }]
     llmLogger.info({ system: feedbackSystem, messages: feedbackMessages }, 'feedback:exercise — request')
 
@@ -879,7 +888,25 @@ router.post('/messages', requireAuth, async (req: Request, res: Response) => {
     // Fetch history and module data in parallel before creating any messages
     const [existingHistory, moduleData] = await Promise.all([
       prisma.chatMessage.findMany({ where: { sessionId: session.id }, orderBy: { order: 'asc' } }),
-      prisma.courseModule.findUnique({ where: { id: moduleId }, select: { name: true, whyThisModule: true } }),
+      prisma.courseModule.findUnique({
+        where:  { id: moduleId },
+        select: {
+          name:          true,
+          whyThisModule: true,
+          objectives:    { select: { text: true } },
+          course:        { select: { language: true, subject: true } },
+          conceptLinks:  {
+            select: {
+              concept: {
+                select: {
+                  name:        true,
+                  theoryBlocks: { select: { content: true }, orderBy: { order: 'asc' } },
+                },
+              },
+            },
+          },
+        },
+      }),
     ])
 
     let orderCounter = existingHistory.length > 0
@@ -925,7 +952,26 @@ router.post('/messages', requireAuth, async (req: Request, res: Response) => {
 
     sseOpen(res)
 
-    const chatSystem = `You are a Socratic tutor for the module "${moduleData?.name}". Never give direct answers. Always guide with questions. ${moduleData?.whyThisModule ?? ''}`
+    const chatLanguage = moduleData?.course.language ?? 'English'
+    const chatObjectives = moduleData?.objectives.map(o => `- ${o.text}`).join('\n') ?? ''
+    const chatTheory = moduleData?.conceptLinks
+      .map(cl => `### ${cl.concept.name}\n${cl.concept.theoryBlocks.map(tb => tb.content).join('\n\n')}`)
+      .join('\n\n') ?? ''
+
+    const chatSystem = [
+      `You are a Socratic tutor for the module "${moduleData?.name}" in a course on ${moduleData?.course.subject ?? 'this subject'}.`,
+      `Respond in ${chatLanguage}.`,
+      '',
+      'Your role: guide students toward understanding through focused questions. Do not state answers directly.',
+      'Ask one question at a time that helps the student reason toward the concept.',
+      'When relevant, reference specific ideas from the theory below rather than asking generic questions.',
+      '',
+      moduleData?.whyThisModule ? `Module purpose: ${moduleData.whyThisModule}` : '',
+      chatObjectives ? `\nLearning objectives:\n${chatObjectives}` : '',
+      chatTheory ? `\nTheory the student has seen:\n${chatTheory}` : '',
+      '',
+      'Formatting: use $...$ for inline math, $$...$$ for display math.',
+    ].filter(line => line !== undefined).join('\n').trim()
     llmLogger.info({ system: chatSystem, messages: recentChat }, 'chat:message — request')
 
     let aiContent = ''

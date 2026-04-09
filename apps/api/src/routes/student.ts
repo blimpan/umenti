@@ -3,7 +3,7 @@ import { CourseStatus, ReviewStatus } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { logger } from '../lib/logger'
-import { GetStudentCoursesResponse, CourseOverview, GetCourseModuleResponse, StudentCourseModule, ReviewConcept } from '@metis/types'
+import { GetStudentCoursesResponse, GetStudentInvitesResponse, CourseOverview, GetCourseModuleResponse, StudentCourseModule, ReviewConcept } from '@metis/types'
 import { getCachedModule, setCachedModule } from '../lib/cache'
 import { applyDecay } from '../lib/decay'
 
@@ -16,20 +16,11 @@ const router = Router()
 // they signed up, so there is no userId yet to match on.
 router.get('/courses', requireAuth, async (req, res) => {
   try {
-    const email = req.user!.email
-
-    const [active, pending] = await Promise.all([
-      prisma.enrollment.findMany({
-        where: { userId: req.user!.id, status: 'ACTIVE' },
-        include: { course: { select: { id: true, name: true, subject: true, status: true } } },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.enrollment.findMany({
-        where: { email, status: 'PENDING' },
-        include: { course: { select: { id: true, name: true, subject: true, status: true } } },
-        orderBy: { createdAt: 'desc' },
-      }),
-    ])
+    const active = await prisma.enrollment.findMany({
+      where: { userId: req.user!.id, status: 'ACTIVE' },
+      include: { course: { select: { id: true, name: true, subject: true, status: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
 
     const courseIds = active.map(e => e.course.id)
 
@@ -64,36 +55,49 @@ router.get('/courses', requireAuth, async (req, res) => {
       scoresByCourse.get(courseId)!.push(applyDecay(p.score, p.lastActivityAt))
     }
 
-    const result: GetStudentCoursesResponse = [
-      ...active.map(e => {
-        const lastSession = lastSessionByCourse.get(e.course.id)
-        const scores = scoresByCourse.get(e.course.id) ?? []
-        const overallProgress = scores.length > 0
-          ? scores.reduce((a, b) => a + b, 0) / scores.length
-          : 0
-        return {
-          enrollmentId: e.id,
-          enrollmentStatus: 'ACTIVE' as const,
-          course: { id: e.course.id, name: e.course.name, subject: e.course.subject, status: e.course.status as CourseStatus },
-          lastModuleId: lastSession?.moduleId ?? null,
-          lastModuleName: lastSession?.moduleName ?? null,
-          overallProgress,
-        }
-      }),
-      ...pending.map(e => ({
+    const result: GetStudentCoursesResponse = active.map(e => {
+      const lastSession = lastSessionByCourse.get(e.course.id)
+      const scores = scoresByCourse.get(e.course.id) ?? []
+      const overallProgress = scores.length > 0
+        ? scores.reduce((a, b) => a + b, 0) / scores.length
+        : 0
+      return {
         enrollmentId: e.id,
-        enrollmentStatus: 'PENDING' as const,
+        enrollmentStatus: 'ACTIVE' as const,
         course: { id: e.course.id, name: e.course.name, subject: e.course.subject, status: e.course.status as CourseStatus },
-        lastModuleId: null,
-        lastModuleName: null,
-        overallProgress: 0,
-      })),
-    ]
+        lastModuleId: lastSession?.moduleId ?? null,
+        lastModuleName: lastSession?.moduleName ?? null,
+        overallProgress,
+      }
+    })
 
     res.json(result)
   } catch (err) {
     logger.error({ err }, '[GET /api/student/courses]')
     res.status(500).json({ error: 'Failed to fetch courses' })
+  }
+})
+
+// GET /api/student/invites — returns only PENDING enrollments for the authenticated student.
+// Kept separate from /courses so the dashboard can cache invite data independently
+// and invalidate it precisely when an invite is accepted or rejected.
+router.get('/invites', requireAuth, async (req, res) => {
+  try {
+    const pending = await prisma.enrollment.findMany({
+      where: { email: req.user!.email, status: 'PENDING' },
+      include: { course: { select: { id: true, name: true, subject: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const result: GetStudentInvitesResponse = pending.map(e => ({
+      enrollmentId: e.id,
+      course: { id: e.course.id, name: e.course.name, subject: e.course.subject },
+    }))
+
+    res.json(result)
+  } catch (err) {
+    logger.error({ err }, '[GET /api/student/invites]')
+    res.status(500).json({ error: 'Failed to fetch invites' })
   }
 })
 

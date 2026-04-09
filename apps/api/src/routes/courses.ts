@@ -230,6 +230,7 @@ router.get('/:id', requireAuth, async (req, res) => {
           visualizationHtml:   ex.visualizationHtml ?? null,
           visualizationType:   ex.visualizationType ?? null,
           visualizationParams: ex.visualizationParams as Record<string, unknown> | null ?? null,
+          targetState:         ex.targetState as Record<string, number> | null ?? null,
         }))
       }))
     }

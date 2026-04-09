@@ -101,7 +101,7 @@ async function gradeClaimWithLlm(
     const { output } = await generateText({
       model:  getModel(),
       output: Output.object({ schema: LlmClaimSchema }),
-      system: 'You are a math teacher grading one specific claim in a student answer. Return correct=true only if the student correctly addressed this claim.',
+      system: 'You are a math teacher grading one specific claim in a student answer. This is a binary grade — return correct=true only if the student correctly addressed this claim. Interpret mathematical notation charitably: if the student\'s meaning is clear and correct, mark it correct even if notation is informal.',
       messages: [{
         role:    'user',
         content: [

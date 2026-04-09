@@ -6,6 +6,32 @@ import { llmLogger } from '../lib/logger'
 import { validateMathSyntax, MathValidationError, MATH_SYNTAX_CONTRACT } from '../lib/mathValidation'
 import { extractCanonicalExpressions } from '../lib/mathCreation'
 
+// Describes each template's actual student interaction — referenced in both the
+// main Pass 3 prompt and the top-up prompt so they stay consistent.
+const INTERACTIVE_QUESTION_GUIDANCE = `
+INTERACTIVE EXERCISE QUESTIONS
+For interactive exercises, the question field must tell the student exactly what
+to do using the specific interaction that template provides. State numeric target
+values explicitly — the target state is shown to the student as a dashed outline.
+
+Template interactions:
+  cartesian_graph — students use sliders to adjust function parameters.
+    Good: "Use the sliders to set the slope to $3$ and the y-intercept to $-1$, forming the line $y = 3x - 1$."
+    Bad:  "Explore how changing the slope affects the graph."
+
+  unit_circle — students drag a point around the circle.
+    Good: "Drag the point around the circle until the angle reaches $135°$."
+    Bad:  "Show the position of $135°$ on the unit circle."
+
+  probability_distribution — students use sliders to adjust distribution parameters.
+    Good: "Adjust the sliders until the normal distribution has mean $\\mu = 2$ and standard deviation $\\sigma = 0.5$."
+    Bad:  "Set the distribution to show the correct bell curve."
+
+  geometric_shape_explorer — students type values into input fields.
+    Good: "Enter the dimensions of a rectangle with width $6$ and height $4$."
+    Bad:  "Create a shape with the correct area."
+`.trim()
+
 const TEMPLATE_CATALOG = `
 CONCEPT CLASSIFICATION
 Classify each concept with one of:
@@ -477,7 +503,150 @@ ${JSON.stringify(output, null, 2)}
     })
 
     await writeModuleExercises(module.id, pass3Result, moduleConcepts)
+    await topUpConceptExercises(module.id, moduleConcepts, course)
   }
+}
+
+// Checks exercise counts per concept after Pass 3 and makes targeted top-up
+// calls for any concept with fewer than 2 exercises. Safe to call even if all
+// concepts already meet the threshold — returns immediately in that case.
+async function topUpConceptExercises(
+  moduleId:       number,
+  moduleConcepts: ModuleConceptWithBlocks[],
+  course:         FullCourse,
+): Promise<void> {
+  const conceptIds = moduleConcepts.map(mc => mc.conceptId)
+
+  // Count exercises per concept for this module
+  const links = await prisma.exerciseConcept.findMany({
+    where: {
+      conceptId: { in: conceptIds },
+      exercise:  { courseModuleId: moduleId },
+    },
+    select: {
+      conceptId: true,
+      exercise:  { select: { question: true } },
+    },
+  })
+
+  const countByConcept    = new Map<number, number>()
+  const questionsByConcept = new Map<number, string[]>()
+  for (const link of links) {
+    countByConcept.set(link.conceptId, (countByConcept.get(link.conceptId) ?? 0) + 1)
+    const qs = questionsByConcept.get(link.conceptId) ?? []
+    qs.push(link.exercise.question)
+    questionsByConcept.set(link.conceptId, qs)
+  }
+
+  const deficient = moduleConcepts.filter(mc => (countByConcept.get(mc.conceptId) ?? 0) < 2)
+  if (deficient.length === 0) return
+
+  llmLogger.info(
+    { moduleId, count: deficient.length, concepts: deficient.map(mc => mc.concept.name) },
+    '[generation] top-up: concepts need more exercises',
+  )
+
+  for (const mc of deficient) {
+    const needed           = 2 - (countByConcept.get(mc.conceptId) ?? 0)
+    const existingQuestions = questionsByConcept.get(mc.conceptId) ?? []
+    const theory           = mc.concept.theoryBlocks.map(b => b.content).join('\n\n')
+
+    try {
+      const result = await generateWithMathValidation({
+        tag:    `Pass3-topup concept=${mc.conceptId}`,
+        schema: Pass3Schema,
+        prompt: buildTopUpPrompt(course, mc.concept.name, theory, existingQuestions, needed),
+        extractStrings: (output) => output.exercises.flatMap(ex => [
+          ex.question,
+          ...(ex.options ?? []),
+          ex.explanation  ?? '',
+          ex.sampleAnswer ?? '',
+          ex.rubric       ?? '',
+        ]),
+        correctivePrompt: (output, errors) => `
+Your previous response contained math formatting errors. Fix ONLY the math syntax — do not change any content.
+
+ERRORS FOUND
+${errors.map(e => `- [${e.rule}] ${e.detail}`).join('\n')}
+
+${MATH_SYNTAX_CONTRACT}
+
+PREVIOUS OUTPUT (fix the math syntax in this)
+${JSON.stringify(output, null, 2)}
+`.trim(),
+      })
+
+      await writeModuleExercises(moduleId, result, moduleConcepts)
+    } catch (err) {
+      llmLogger.warn({ err, conceptId: mc.conceptId, name: mc.concept.name }, '[generation] top-up: failed for concept — skipping')
+    }
+  }
+
+  // Warn for any concept that still falls short after top-up
+  const afterLinks = await prisma.exerciseConcept.findMany({
+    where: {
+      conceptId: { in: deficient.map(mc => mc.conceptId) },
+      exercise:  { courseModuleId: moduleId },
+    },
+    select: { conceptId: true },
+  })
+  const afterCount = new Map<number, number>()
+  for (const link of afterLinks) {
+    afterCount.set(link.conceptId, (afterCount.get(link.conceptId) ?? 0) + 1)
+  }
+  for (const mc of deficient) {
+    if ((afterCount.get(mc.conceptId) ?? 0) < 2) {
+      llmLogger.warn(
+        { conceptId: mc.conceptId, name: mc.concept.name, count: afterCount.get(mc.conceptId) ?? 0 },
+        '[generation] top-up: concept still has fewer than 2 exercises after top-up',
+      )
+    }
+  }
+}
+
+function buildTopUpPrompt(
+  course:            FullCourse,
+  conceptName:       string,
+  theory:            string,
+  existingQuestions: string[],
+  needed:            number,
+): string {
+  const existingBlock = existingQuestions.length > 0
+    ? `Existing exercise questions for this concept (do not duplicate):\n${existingQuestions.map(q => `- ${q}`).join('\n')}`
+    : ''
+
+  return `
+You are generating additional exercises for one concept in a course.
+
+Course: ${course.name}
+Subject: ${course.subject}
+Language: ${course.language}
+Target audience: ${course.targetAudience}
+
+Concept: ${conceptName}
+Theory:
+${theory}
+
+${existingBlock}
+
+Generate exactly ${needed} new exercise(s) for this concept.
+Requirements:
+- Each exercise must set conceptNames to ["${conceptName}"]
+- Prefer exercise types not already used for this concept
+- multiple_choice: provide exactly 4 options; correctIndex must be 0, 1, 2, or 3
+- free_text: provide a sampleAnswer and a rubric describing what a good answer looks like
+- You may also generate an interactive exercise where appropriate
+- interactive: pick templateId + templateParamsJson (initial state) + targetState (JSON-encoded target)
+- Exercises must test understanding at the level appropriate for: ${course.targetAudience}
+
+${INTERACTIVE_QUESTION_GUIDANCE}
+
+${MATH_SYNTAX_CONTRACT}
+
+${TEMPLATE_CATALOG}
+
+Respond in ${course.language}.
+`.trim()
 }
 
 function buildPass3Prompt(
@@ -516,7 +685,8 @@ ${conceptsBlock}
 
 TASK
 Generate exercises that test the concepts above. Requirements:
-- Include a mix of multiple_choice and free_text exercises
+- Generate at least 2 exercises per concept. Every concept listed above must appear in conceptNames of at least 2 exercises.
+- Where possible, use different exercise types for the same concept (e.g. one multiple_choice and one free_text).
 - Reference concepts using the EXACT names listed above (conceptNames field)
 - Each exercise must link to at least one concept
 - multiple_choice: provide exactly 4 options; correctIndex must be 0, 1, 2, or 3
@@ -524,6 +694,8 @@ Generate exercises that test the concepts above. Requirements:
 - Exercises must test understanding at the level appropriate for: ${course.targetAudience}
 - You may also generate interactive exercises (type: "interactive") where the student manipulates a visualization to reach a target state. Use this for concepts where hands-on manipulation is more meaningful than text answers.
 - interactive: pick templateId + templateParamsJson (initial state) + targetState (JSON-encoded target). You choose the template independently — it does not need to match any theory block visualization.
+
+${INTERACTIVE_QUESTION_GUIDANCE}
 
 ${MATH_SYNTAX_CONTRACT}
 
@@ -539,7 +711,13 @@ async function writeModuleExercises(
 ): Promise<void> {
   const conceptMap = new Map(moduleConcepts.map(mc => [mc.concept.name.toLowerCase(), mc.concept.id]))
 
-  let exerciseOrder = 0
+  // Start after any existing exercises so top-up calls append rather than restart.
+  const maxOrderRow = await prisma.exercise.findFirst({
+    where:   { courseModuleId: moduleId },
+    orderBy: { order: 'desc' },
+    select:  { order: true },
+  })
+  let exerciseOrder = maxOrderRow ? maxOrderRow.order + 1 : 0
   for (const ex of output.exercises) {
     const conceptIds = ex.conceptNames
       .map(name => conceptMap.get(name.toLowerCase()))
