@@ -9,10 +9,12 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   if (!user) redirect('/login')
   if (user.user_metadata?.role !== 'TEACHER') redirect('/student/dashboard')
 
+  const userName = user.user_metadata?.full_name ?? user.email ?? 'Teacher'
+
   return (
     <GenerationPollerProvider>
       <div className="flex min-h-screen">
-        <Sidebar role="TEACHER" />
+        <Sidebar role="TEACHER" userName={userName} />
         <main className="flex-1 min-w-0">
           {children}
         </main>

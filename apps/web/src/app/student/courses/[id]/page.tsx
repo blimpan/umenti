@@ -23,6 +23,8 @@ export default async function StudentCoursePage({ params }: Props) {
 
   if (!session) redirect('/login')
 
+  const userName = session.user.user_metadata?.full_name ?? session.user.email ?? 'Student'
+
   const [courseRes, progressRes] = await Promise.all([
     timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/courses/${id}/overview`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
@@ -60,7 +62,7 @@ export default async function StudentCoursePage({ params }: Props) {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar role="STUDENT" />
+      <Sidebar role="STUDENT" userName={userName} />
 
       <main className="flex-1 p-8 max-w-3xl">
         <Link href="/student/dashboard" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">

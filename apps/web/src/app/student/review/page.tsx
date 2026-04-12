@@ -12,6 +12,8 @@ export default async function ReviewPage() {
   if (!session) redirect('/login')
   if (session.user.user_metadata?.role !== 'STUDENT') redirect('/teacher/dashboard')
 
+  const userName = session.user.user_metadata?.full_name ?? session.user.email ?? 'Student'
+
   const res = await timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/review`, {
     headers: { Authorization: `Bearer ${session.access_token}` },
     cache: 'no-store',
@@ -21,7 +23,7 @@ export default async function ReviewPage() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar role="STUDENT" />
+      <Sidebar role="STUDENT" userName={userName} />
 
       <main className="flex-1 p-8 max-w-4xl">
         <div className="mb-8">

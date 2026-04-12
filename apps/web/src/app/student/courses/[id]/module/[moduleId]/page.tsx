@@ -23,6 +23,8 @@ export default async function ModuleLandingPage({ params }: Props) {
 
   if (!session) redirect('/login')
 
+  const userName = session.user.user_metadata?.full_name ?? session.user.email ?? 'Student'
+
   // Fetch course and progress in parallel to minimise wait time
   const [courseRes, progressRes] = await Promise.all([
     timedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/student/courses/${courseId}/overview`, {
@@ -49,7 +51,7 @@ export default async function ModuleLandingPage({ params }: Props) {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar role="STUDENT" />
+      <Sidebar role="STUDENT" userName={userName} />
 
       <main className="flex-1 p-8">
         {/* Breadcrumb */}

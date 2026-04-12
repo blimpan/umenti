@@ -952,19 +952,17 @@ export default function SessionShell({ courseId, courseName, currentModule, allM
         className="w-10 shrink-0 border-r border-gray-100 flex flex-col items-center pt-4 pb-4 bg-white"
         onMouseEnter={() => setLeftOpen(true)}
       >
-        {/* Logo */}
-        <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center shrink-0 mb-4">
-          <span className="text-white text-xs font-bold">M</span>
-        </div>
+        {/* Teal brand dot */}
+        <div className="w-2 h-2 rounded-full bg-teal-600 shrink-0 mb-4 mt-1" />
 
-        {/* Rotated label — mirrors the Resources rail on the right */}
+        {/* Rotated label */}
         <div
           className={`flex-1 flex items-center justify-center transition-colors ${
-            leftOpen ? 'text-gray-700' : 'text-gray-400 hover:text-gray-600'
+            leftOpen ? 'text-teal-600' : 'text-gray-300 hover:text-gray-400'
           }`}
           style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
         >
-          <span className="text-xs font-medium tracking-wide">Navigation</span>
+          <span className="text-[10px] font-medium tracking-wide">Navigation</span>
         </div>
       </aside>
 
@@ -978,70 +976,78 @@ export default function SessionShell({ courseId, courseName, currentModule, allM
           leftOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
         }`}
       >
+  {/* Logo / home */}
+  <Link
+    href="/student/dashboard"
+    className="flex items-center gap-2 mb-6 shrink-0"
+    onClick={() => setLeftOpen(false)}
+  >
+    <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0" />
+    <span className="text-base font-bold text-gray-900">Umenti</span>
+  </Link>
+
+  {/* Course header */}
+  <p className="text-sm font-bold text-gray-900 truncate">{courseName}</p>
+  <p className="text-xs text-gray-400 mt-0.5 mb-3">
+    Module {currentModule.order + 1} of {allModules.length}
+  </p>
+
+  {/* Progress bar */}
+  <div className="mb-4">
+    <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+      <div
+        className="h-full bg-teal-600 rounded-full transition-all"
+        style={{ width: `${(currentModule.order / allModules.length) * 100}%` }}
+      />
+    </div>
+    <p className="text-[10px] text-gray-400 text-right mt-1">
+      {currentModule.order} of {allModules.length} complete
+    </p>
+  </div>
+
+  {/* Module list */}
+  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 px-1 mb-2">
+    Modules
+  </p>
+  <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
+    {allModules.map((m) => {
+      const isCurrentModule = m.id === currentModule.id
+      const isDone = m.order < currentModule.order
+      return (
         <Link
-          href="/student/dashboard"
-          className="text-xl font-bold text-accent mb-8 shrink-0"
+          key={m.id}
+          href={`/student/courses/${courseId}/module/${m.id}/session`}
           onClick={() => setLeftOpen(false)}
+          className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors ${
+            isCurrentModule
+              ? 'border border-teal-600 text-teal-600 font-semibold'
+              : isDone
+              ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+          }`}
         >
-          Metis
+          <span
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+              isDone || isCurrentModule ? 'bg-teal-600' : 'bg-gray-300'
+            }`}
+          />
+          <span className="truncate">{m.name}</span>
+          {isDone && <span className="ml-auto text-[10px] text-teal-600 shrink-0">✓</span>}
         </Link>
+      )
+    })}
+  </nav>
 
-        {/* Main nav */}
-        <nav className="flex flex-col gap-1 flex-1">
-          {studentNavItems.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setLeftOpen(false)}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-accent-light hover:text-accent transition-colors"
-            >
-              {item.label}
-            </Link>
-          ))}
-
-          {/* Module list within this course */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="px-3 mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              {courseName}
-            </p>
-            {allModules.map(m => (
-              <Link
-                key={m.id}
-                href={`/student/courses/${courseId}/module/${m.id}/session`}
-                onClick={() => setLeftOpen(false)}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  m.id === currentModule.id
-                    ? 'bg-gray-100 text-gray-900 font-medium'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
-                  m.id === currentModule.id ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-500'
-                }`}>
-                  {m.order + 1}
-                </span>
-                <span className="truncate">{m.name}</span>
-              </Link>
-            ))}
-          </div>
-        </nav>
-
-        {/* Bottom actions */}
-        <div className="shrink-0 flex flex-col gap-1 mt-4">
-          <Link
-            href="/settings"
-            onClick={() => setLeftOpen(false)}
-            className="px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors"
-          >
-            Account settings
-          </Link>
-          <button
-            onClick={handleSignOut}
-            className="text-left px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
+  {/* Bottom */}
+  <div className="shrink-0 border-t border-gray-100 pt-3 mt-3">
+    <Link
+      href="/settings"
+      onClick={() => setLeftOpen(false)}
+      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+    >
+      Account settings
+    </Link>
+  </div>
       </div>
 
       {/* ------------------------------------------------------------------ */}

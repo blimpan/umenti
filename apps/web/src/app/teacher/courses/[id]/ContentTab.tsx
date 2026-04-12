@@ -3,17 +3,6 @@
 import { CourseDetail } from '@metis/types'
 import ModuleEditor from './ModuleEditor'
 
-const REVIEW_BADGE: Record<string, string> = {
-  UNREVIEWED: 'bg-gray-100 text-gray-500',
-  IN_REVIEW:  'bg-yellow-50 text-yellow-700',
-  APPROVED:   'bg-green-50 text-green-700',
-}
-
-const REVIEW_LABEL: Record<string, string> = {
-  UNREVIEWED: 'New',
-  IN_REVIEW:  'In review',
-  APPROVED:   'Approved',
-}
 
 interface Props {
   course: CourseDetail
@@ -32,7 +21,7 @@ export default function ContentTab({ course, selectedModuleId, onSelectModule, o
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Module sidebar */}
-      <aside className="w-60 shrink-0 border-r bg-gray-50 flex flex-col overflow-hidden">
+      <aside className="w-60 shrink-0 border-r bg-white flex flex-col overflow-hidden">
         <div className="p-4 border-b bg-white">
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Modules</p>
           <p className="text-xs text-gray-400 mt-1">
@@ -47,16 +36,16 @@ export default function ContentTab({ course, selectedModuleId, onSelectModule, o
               onClick={() => onSelectModule(module.id)}
               className={`w-full text-left px-3 py-2.5 rounded-lg mb-1 flex items-center justify-between gap-2 transition-colors text-sm ${
                 selectedModule?.id === module.id
-                  ? 'bg-white shadow-sm font-medium text-gray-900'
-                  : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                  ? 'border border-teal-600 text-teal-600 font-semibold'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
               <span className="truncate">{module.name}</span>
-              <span
-                className={`shrink-0 text-xs px-1.5 py-0.5 rounded-full ${REVIEW_BADGE[module.reviewStatus]}`}
-              >
-                {REVIEW_LABEL[module.reviewStatus]}
-              </span>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                module.reviewStatus === 'APPROVED'  ? 'bg-green-500' :
+                module.reviewStatus === 'IN_REVIEW' ? 'bg-yellow-400' :
+                'bg-gray-300'
+              }`} />
             </button>
           ))}
         </nav>

@@ -6,12 +6,6 @@ interface Props {
   onOpenModule: (moduleId: number) => void
 }
 
-const REVIEW_BORDER: Record<string, string> = {
-  UNREVIEWED: 'border-l-gray-200',
-  IN_REVIEW:  'border-l-yellow-400',
-  APPROVED:   'border-l-green-400',
-}
-
 const REVIEW_BADGE: Record<string, string> = {
   UNREVIEWED: 'bg-gray-100 text-gray-500',
   IN_REVIEW:  'bg-yellow-50 text-yellow-700',
@@ -38,12 +32,25 @@ export default function OverviewTab({ course, onOpenModule }: Props) {
           { label: 'Concepts', value: totalConcepts },
           { label: 'Exercises', value: totalExercises },
           { label: 'Approved', value: `${approvedCount} / ${course.modules.length}` },
-        ].map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-gray-200 p-5">
-            <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
-            <p className="text-sm text-gray-500 mt-0.5">{stat.label}</p>
-          </div>
-        ))}
+        ].map((stat) => {
+          const isApprovedComplete =
+            stat.label === 'Approved' &&
+            course.modules.length > 0 &&
+            approvedCount === course.modules.length
+          return (
+            <div
+              key={stat.label}
+              className={`rounded-xl border p-5 ${
+                isApprovedComplete ? 'border-teal-600' : 'border-gray-200'
+              }`}
+            >
+              <p className={`text-2xl font-semibold ${isApprovedComplete ? 'text-teal-600' : 'text-gray-900'}`}>
+                {stat.value}
+              </p>
+              <p className="text-sm text-gray-500 mt-0.5">{stat.label}</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Review progress bar */}
@@ -76,14 +83,21 @@ export default function OverviewTab({ course, onOpenModule }: Props) {
             <button
               key={module.id}
               onClick={() => onOpenModule(module.id)}
-              className={`w-full text-left rounded-xl border-l-4 border border-gray-200 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between gap-4 ${REVIEW_BORDER[module.reviewStatus]}`}
+              className="w-full text-left rounded-xl border border-gray-200 p-4 hover:bg-gray-50 transition-colors flex items-center justify-between gap-4"
             >
-              <div className="min-w-0">
-                <p className="font-medium text-gray-900 truncate">{module.name}</p>
-                <p className="text-sm text-gray-400 mt-0.5">
-                  {module.concepts.length} concept{module.concepts.length !== 1 ? 's' : ''} ·{' '}
-                  {module.exercises.length} exercise{module.exercises.length !== 1 ? 's' : ''}
-                </p>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${
+                  module.reviewStatus === 'APPROVED'  ? 'bg-green-500' :
+                  module.reviewStatus === 'IN_REVIEW' ? 'bg-yellow-400' :
+                  'bg-gray-300'
+                }`} />
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 truncate">{module.name}</p>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    {module.concepts.length} concept{module.concepts.length !== 1 ? 's' : ''} ·{' '}
+                    {module.exercises.length} exercise{module.exercises.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
               </div>
               <span
                 className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${REVIEW_BADGE[module.reviewStatus]}`}
