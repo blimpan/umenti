@@ -7,6 +7,7 @@ import { rewriteFragmentForCopy } from '@/lib/mathPaste'
 
 interface Props {
   children: string
+  className?: string
 }
 
 /**
@@ -16,7 +17,7 @@ interface Props {
  * Intercepts copy events so that selecting rendered math and copying it puts
  * the LaTeX source ($latex$) on the clipboard instead of the unicode glyphs.
  */
-export default function MathMarkdown({ children }: Props) {
+export default function MathMarkdown({ children, className }: Props) {
   function handleCopy(e: React.ClipboardEvent<HTMLDivElement>) {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
@@ -29,7 +30,7 @@ export default function MathMarkdown({ children }: Props) {
   }
 
   return (
-    <div onCopy={handleCopy}>
+    <div onCopy={handleCopy} className={className}>
       <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
         {children}
       </ReactMarkdown>

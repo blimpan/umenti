@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ExerciseAnalysisSummary, GetExerciseAnalyticsResponse, TriggerAnalysisResponse } from '@metis/types'
 import { apiFetch } from '@/lib/api'
+import MathMarkdown from '@/components/MathMarkdown'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 
@@ -64,9 +65,9 @@ function ExerciseRow({ exercise, courseId, onAnalysisUpdate }: ExerciseRowProps)
   return (
     <div className="border-b border-gray-100 last:border-b-0">
       <div className="px-4 py-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-800 font-medium line-clamp-2">{exercise.question}</p>
+            <MathMarkdown className="text-sm text-gray-800 font-medium line-clamp-2 [&_p]:m-0">{exercise.question}</MathMarkdown>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize">
                 {exercise.type.replace('_', ' ').toLowerCase()}
@@ -117,7 +118,7 @@ function ExerciseRow({ exercise, courseId, onAnalysisUpdate }: ExerciseRowProps)
         {expanded && hasAnalysis && (
           <div className="mt-3 bg-gray-50 rounded-xl p-3 space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Summary</p>
-            <p className="text-sm text-gray-700">{exercise.analysis!.summary}</p>
+            <MathMarkdown className="text-sm text-gray-700 [&_p]:m-0">{exercise.analysis!.summary}</MathMarkdown>
 
             {exercise.analysis!.commonMisconceptions.length > 0 && (
               <>
@@ -128,7 +129,7 @@ function ExerciseRow({ exercise, courseId, onAnalysisUpdate }: ExerciseRowProps)
                   {exercise.analysis!.commonMisconceptions.map((m, i) => (
                     <li key={i} className="text-sm text-gray-700 flex gap-2">
                       <span className="text-gray-400 shrink-0">·</span>
-                      <span>{m}</span>
+                      <MathMarkdown className="min-w-0 flex-1 [&_p]:m-0">{m}</MathMarkdown>
                     </li>
                   ))}
                 </ul>
