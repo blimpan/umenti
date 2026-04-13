@@ -49,7 +49,6 @@ export default function Sidebar({ role, userName }: { role: Role; userName: stri
     <aside className="w-56 shrink-0 h-screen sticky top-0 flex flex-col border-r border-gray-200 bg-white px-3 py-6">
       {/* Logo */}
       <Link href={homeHref} className="flex items-center gap-2 px-3 mb-8">
-        <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0" />
         <span className="text-base font-bold text-gray-900">Umenti</span>
       </Link>
 

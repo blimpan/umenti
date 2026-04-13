@@ -982,7 +982,6 @@ export default function SessionShell({ courseId, courseName, currentModule, allM
     className="flex items-center gap-2 mb-6 shrink-0"
     onClick={() => setLeftOpen(false)}
   >
-    <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0" />
     <span className="text-base font-bold text-gray-900">Umenti</span>
   </Link>
 

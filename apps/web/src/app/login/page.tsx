@@ -36,7 +36,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center">
       <div className="w-full max-w-sm space-y-6">
-        <h1 className="text-2xl font-semibold text-center">Sign in to Metis</h1>
+        <h1 className="text-2xl font-semibold text-center">Sign in to Umenti</h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
