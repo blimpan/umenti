@@ -429,6 +429,11 @@ async function writeModuleConcepts(
       data:  { conceptType: gen.conceptType },
     })
 
+    // Delete existing child records before recreating — makes this function
+    // idempotent so retries or regeneration don't append duplicate rows.
+    await prisma.theoryBlock.deleteMany({ where: { conceptId: concept.id } })
+    await prisma.conceptVisualization.deleteMany({ where: { conceptId: concept.id } })
+
     await prisma.theoryBlock.createMany({
       data: gen.theoryBlocks.map((content, order) => ({ conceptId: concept.id, content, order })),
     })
@@ -738,18 +743,22 @@ async function writeModuleExercises(
       ex.type === 'free_text'       ? 'FREE_TEXT'       :
                                       'INTERACTIVE'
 
+    // Strip bytes Postgres rejects in UTF-8 columns (null bytes, non-characters).
+    const sanitize = (s: string | undefined | null) =>
+      s?.replace(/\x00/g, '').replace(/[\uFFFE\uFFFF]/g, '')
+
     const exercise = await prisma.exercise.create({
       data: {
         courseModuleId:    moduleId,
         type:              exerciseType,
-        question:          ex.question,
+        question:          sanitize(ex.question) ?? ex.question,
         order:             exerciseOrder++,
-        options,
+        options:           options?.map(o => sanitize(o) ?? o),
         correctIndex,
-        explanation:       ex.explanation,
-        sampleAnswer:      ex.sampleAnswer,
-        rubric:            ex.rubric,
-        visualizationHtml:   ex.visualizationHtml ?? null,
+        explanation:       sanitize(ex.explanation),
+        sampleAnswer:      sanitize(ex.sampleAnswer),
+        rubric:            sanitize(ex.rubric),
+        visualizationHtml:   sanitize(ex.visualizationHtml) ?? null,
         visualizationType:   ex.templateId ?? null,
         visualizationParams: ex.templateId && ex.templateId !== 'custom' && ex.templateParamsJson
           ? (() => { try { return JSON.parse(ex.templateParamsJson) } catch { return undefined } })()
