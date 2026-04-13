@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "ts-node-dev --transpile-only --no-deps prisma/seed.ts"
