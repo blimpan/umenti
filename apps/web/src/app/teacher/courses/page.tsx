@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import type { GetCoursesResponse, CourseStatus } from '@metis/types'
 import { timedFetch } from '@/lib/timed-fetch'
 import Link from 'next/link'
-import DeleteCourseButton from './DeleteCourseButton'
 import RetryGenerationButton from './RetryGenerationButton'
 
 export default async function MyCoursesPage() {
@@ -52,7 +51,6 @@ export default async function MyCoursesPage() {
               </p>
               <div className="flex items-center gap-3">
                 {course.status === 'FAILED' && <RetryGenerationButton courseId={course.id} />}
-                <DeleteCourseButton courseId={course.id} />
               </div>
             </div>
           </Link>

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CourseDetail } from '@metis/types'
+import { apiFetch } from '@/lib/api'
 
 interface Props {
   course: CourseDetail
@@ -9,10 +11,21 @@ interface Props {
 }
 
 export default function SettingsModal({ course, onClose }: Props) {
+  const router = useRouter()
   const [name, setName] = useState(course.name)
   const [subject, setSubject] = useState(course.subject)
   const [language, setLanguage] = useState(course.language)
   const [targetAudience, setTargetAudience] = useState(course.targetAudience)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses/${course.id}`, {
+      method: 'DELETE',
+    })
+    router.push('/teacher/courses')
+  }
 
   const fields = [
     { label: 'Course name', value: name, set: setName },
@@ -81,12 +94,30 @@ export default function SettingsModal({ course, onClose }: Props) {
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">
               Danger zone
             </p>
-            <button
-              onClick={() => console.log('TODO: delete course')}
-              className="text-sm text-red-500 hover:text-red-700 transition-colors"
-            >
-              Delete course
-            </button>
+            {confirmingDelete ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-sm text-red-600 font-medium hover:underline disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting...' : 'Confirm delete'}
+                </button>
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                className="text-sm text-red-500 hover:text-red-700 transition-colors"
+              >
+                Delete course
+              </button>
+            )}
           </div>
         </div>
       </div>
