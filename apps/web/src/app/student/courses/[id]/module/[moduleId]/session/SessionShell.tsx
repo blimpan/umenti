@@ -622,6 +622,8 @@ export default function SessionShell({ courseId, courseName, currentModule, allM
       if (pendingRef.current.length === 0) return
       const target = e.target as HTMLElement
       if (target.tagName === 'BUTTON') return
+      if (target.isContentEditable) return
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
       e.preventDefault()
       revealNext()
     }
