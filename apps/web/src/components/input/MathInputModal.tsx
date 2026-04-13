@@ -54,7 +54,9 @@ export function MathInputModal({ open, initialLatex = '', isEditing = false, onI
     if (el.value !== latex) el.value = latex
   }, [tab, latex])
 
-  // Attach input listener once per tab switch (setLatex is stable from useState)
+  // Attach input listener once per tab switch or dialog open (setLatex is stable from useState)
+  // Must include `open` because Radix Dialog only mounts <math-field> when open=true,
+  // so mathFieldRef.current is null on initial mount and the listener would never attach.
   useEffect(() => {
     const el = mathFieldRef.current
     if (!el || tab !== 'visual') return
@@ -63,7 +65,7 @@ export function MathInputModal({ open, initialLatex = '', isEditing = false, onI
     }
     el.addEventListener('input', handleInput)
     return () => el.removeEventListener('input', handleInput)
-  }, [tab])
+  }, [tab, open])
 
   function handleDragStart(e: React.PointerEvent<HTMLDivElement>) {
     // Ignore clicks that originate from tab buttons — let them pass through normally
